@@ -1,0 +1,19 @@
+/NOLOGO
+/errorReport:prompt
+/MACHINE:x64
+/SUBSYSTEM:WINDOWS
+/DEF
+/NAME:"UnrealEditor-Horizon.dll"
+/IGNORE:4221
+/NODEFAULTLIB
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Intermediate/Build/Win64/x64/MyProject2Editor/Development/UnrealEd/SharedPCH.UnrealEd.Project.ValApi.ValExpApi.Cpp20.InclOrderUnreal5_3.h.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/Module.Horizon.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/HorioznExampleActor.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/Horizon.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/HorizonBlueprintLibrary.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/HorizonSettings.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/HorizonSubsystem.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/HorizonWebSocketClient.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/HorizonWebsocketComponent.cpp.obj"
+"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/Default.rc2.res"
+/OUT:"C:/Users/redst/OneDrive/Documents/Unreal Projects/MyProject2/Plugins/Horizon/Intermediate/Build/Win64/x64/UnrealEditor/Development/Horizon/UnrealEditor-Horizon.lib"
