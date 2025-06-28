@@ -38,27 +38,20 @@ void FHorizonModule::ShutdownModule()
 
 void FHorizonModule::InitializeWebSocket()
 {
-	try
-	{
-		// Initialize platform-specific networking
+	// Initialize platform-specific networking
 #if PLATFORM_WINDOWS
-		WSADATA WsaData;
-		int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
-		if (Result != 0)
-		{
-			UE_LOG(LogHorizon, Error, TEXT("WSAStartup failed with error: %d"), Result);
-			return;
-		}
+	WSADATA WsaData;
+	int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
+	if (Result != 0)
+	{
+		UE_LOG(LogHorizon, Error, TEXT("WSAStartup failed with error: %d"), Result);
+		bWebSocketInitialized = false;
+		return;
+	}
 #endif
 
-		bWebSocketInitialized = true;
-		UE_LOG(LogHorizon, Log, TEXT("WebSocket subsystem initialized successfully"));
-	}
-	catch (...)
-	{
-		UE_LOG(LogHorizon, Error, TEXT("Failed to initialize WebSocket subsystem"));
-		bWebSocketInitialized = false;
-	}
+	bWebSocketInitialized = true;
+	UE_LOG(LogHorizon, Log, TEXT("WebSocket subsystem initialized successfully"));
 }
 
 void FHorizonModule::ShutdownWebSocket()

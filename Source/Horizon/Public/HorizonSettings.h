@@ -19,9 +19,9 @@ public:
 	UHorizonSettings();
 
 	// UDeveloperSettings interface
-	virtual FName GetCategoryName() const override;
-	virtual FText GetSectionText() const override;
-	virtual FText GetSectionDescription() const override;
+	virtual FName GetCategoryName() const;
+	virtual FText GetSectionText() const;
+	virtual FText GetSectionDescription() const;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
