@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "HorizonWebSocketComponent.h"
 #include "HorizonWebSocketClient.h"
 #include "Horizon.h"
