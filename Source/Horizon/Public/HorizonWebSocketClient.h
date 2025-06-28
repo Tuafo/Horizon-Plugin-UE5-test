@@ -1,44 +1,36 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
-#include "Engine/Engine.h"
-#include "Tickable.h"
-#include "HAL/ThreadSafeBool.h"
-#include "Async/AsyncWork.h"
-#include "Templates/SharedPointer.h"
-#include "Containers/Queue.h"
+#include "Engine/EngineTypes.h"
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
-#include "Sockets.h"
-#include "SocketSubsystem.h"
+#include "HAL/ThreadSafeBool.h"
 #include "HAL/CriticalSection.h"
+#include "Containers/Queue.h"
+#include "Sockets.h"
+#include "Tickable.h"
 #include "HorizonDelegates.h"
 
 #include "HorizonWebSocketClient.generated.h"
 
-// Forward declarations
-class FHorizonWebSocketWorker;
-
 UENUM(BlueprintType)
 enum class EHorizonWebSocketState : uint8
 {
-	Disconnected		UMETA(DisplayName = "Disconnected"),
-	Connecting			UMETA(DisplayName = "Connecting"),
-	Connected			UMETA(DisplayName = "Connected"),
-	Reconnecting		UMETA(DisplayName = "Reconnecting"),
-	Failed				UMETA(DisplayName = "Failed"),
-	Closing				UMETA(DisplayName = "Closing")
+	Disconnected,
+	Connecting,
+	Connected,
+	Closing,
+	Closed,
+	Failed,
+	Reconnecting
 };
 
-/**
- * Horizon WebSocket Client - Standalone Implementation
- * A robust WebSocket client with automatic reconnection, heartbeat monitoring, and comprehensive event handling
- * No external dependencies - uses only UE5 core networking
- */
-UCLASS(BlueprintType, Blueprintable, Category = "Horizon")
+// Forward declarations
+class FHorizonWebSocketWorker;
+
+UCLASS(BlueprintType, Blueprintable)
 class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGameObject
 {
 	GENERATED_BODY()
@@ -46,166 +38,163 @@ class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGame
 public:
 	UHorizonWebSocketClient();
 	virtual ~UHorizonWebSocketClient();
+	
+	// External heartbeat function
+	void SendHeartbeat();
 
-	// UObject overrides
+	// UObject interface
 	virtual void BeginDestroy() override;
 	virtual UWorld* GetWorld() const override;
 
-	// FTickableGameObject overrides
+	// FTickableGameObject interface
 	virtual void Tick(float DeltaTime) override;
-	virtual bool IsTickable() const override { return true; }
-	virtual bool IsTickableWhenPaused() const override { return false; }
-	virtual bool IsTickableInEditor() const override { return false; }
 	virtual TStatId GetStatId() const override;
+	virtual bool IsTickable() const override { return !bShouldShutdown; }
 
-	// Event delegates
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
-	FOnHorizonWebSocketConnected OnConnected;
+	// GetServerURL
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
+	FString GetServerURL() const;
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
+	FString GetServerProtocol() const;
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
+	int32 GetCurrentReconnectAttempts() const;
 
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
-	FOnHorizonWebSocketConnectionError OnConnectionError;
-
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
-	FOnHorizonWebSocketClosed OnClosed;
-
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
-	FOnHorizonWebSocketMessage OnMessage;
-
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
-	FOnHorizonWebSocketRawMessage OnRawMessage;
-
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
-	FOnHorizonWebSocketMessageSent OnMessageSent;
-
-	// Configuration properties
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Configuration")
-	bool bEnableHeartbeat = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Configuration", meta = (ClampMin = "5", ClampMax = "300"))
-	float HeartbeatIntervalSeconds = 30.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Configuration", meta = (ClampMin = "1", ClampMax = "10"))
-	int32 MaxReconnectAttempts = 3;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Configuration")
-	float ReconnectDelaySeconds = 5.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Configuration")
-	FString HeartbeatMessage = TEXT("ping");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Configuration")
-	bool bAutoReconnect = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Debug")
-	bool bVerboseLogging = false;
-
-	// Public API
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Connection")
+	// Connection management
+	UFUNCTION(BlueprintCallable, Category = "WebSocket")
 	bool Connect(const FString& URL, const FString& Protocol = TEXT(""));
 
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Connection")
+	UFUNCTION(BlueprintCallable, Category = "WebSocket")
 	void Disconnect();
 
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messaging")
-	bool SendMessage(const FString& Message);
-
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messaging")
-	bool SendBinaryMessage(const TArray<uint8>& Data);
-
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Status")
-	bool IsConnected() const;
-
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Status")
-	EHorizonWebSocketState GetConnectionState() const;
-
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Status")
-	FString GetServerURL() const { return ServerURL; }
-
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Status")
-	FString GetServerProtocol() const { return ServerProtocol; }
-
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Status")
-	int32 GetCurrentReconnectAttempts() const { return CurrentReconnectAttempts; }
-
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Connection")
+	UFUNCTION(BlueprintCallable, Category = "WebSocket")
 	void ForceReconnect();
 
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Heartbeat")
-	void SendHeartbeat();
+	// Message sending
+	UFUNCTION(BlueprintCallable, Category = "WebSocket")
+	bool SendMessage(const FString& Message);
 
+	UFUNCTION(BlueprintCallable, Category = "WebSocket")
+	bool SendBinaryMessage(const TArray<uint8>& Data);
+
+	// Status
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
+	bool IsConnected() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
+	EHorizonWebSocketState GetConnectionState() const;
+
+	// Events
+	UPROPERTY(BlueprintAssignable, Category = "WebSocket")
+	FOnHorizonWebSocketConnected OnConnected;
+
+	UPROPERTY(BlueprintAssignable, Category = "WebSocket")
+	FOnHorizonWebSocketConnectionError OnConnectionError;
+
+	UPROPERTY(BlueprintAssignable, Category = "WebSocket")
+	FOnHorizonWebSocketClosed OnClosed;
+
+	UPROPERTY(BlueprintAssignable, Category = "WebSocket")
+	FOnHorizonWebSocketMessage OnMessage;
+
+	UPROPERTY(BlueprintAssignable, Category = "WebSocket")
+	FOnHorizonWebSocketRawMessage OnRawMessage;
+
+	UPROPERTY(BlueprintAssignable, Category = "WebSocket")
+	FOnHorizonWebSocketMessageSent OnMessageSent;
+
+	// Configuration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	bool bAutoReconnect = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	int32 MaxReconnectAttempts = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	float ReconnectDelaySeconds = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	bool bEnableHeartbeat = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	float HeartbeatIntervalSeconds = 30.0f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	FString HeartbeatMessage = TEXT("ping");
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	bool bVerboseLogging = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	bool bImmediateProcessing = false;
+	
 protected:
+	// Internal connection state
+	mutable FCriticalSection StateMutex;
+	EHorizonWebSocketState ConnectionState;
+
+	// Reconnection handling
+	int32 CurrentReconnectAttempts;
+	FThreadSafeBool bShouldShutdown;
+	bool bIsReconnecting;
+	double LastHeartbeatTime;
+	double LastMessageReceivedTime;
+	double ReconnectScheduledTime;
+
+	// Socket and networking
+	mutable FCriticalSection SocketMutex;
+	FSocket* Socket;
+	FString ServerURL;
+	FString ServerHost;
+	FString ServerPath;
+	FString ServerProtocol;
+	int32 ServerPort;
+	bool bIsSecureConnection;
+
+	// Worker thread
+	TUniquePtr<FHorizonWebSocketWorker> WebSocketWorker;
+	FRunnableThread* WorkerThread;
+
+	// Message queues
+	TQueue<FString, EQueueMode::Mpsc> OutgoingMessages;
+	TQueue<TArray<uint8>, EQueueMode::Mpsc> OutgoingBinaryMessages;
+	TQueue<TArray<uint8>, EQueueMode::Mpsc> IncomingData;
+
+	// Frame processing
+	TArray<uint8> FrameBuffer;
+
 	// Internal methods
 	void CleanupWebSocket();
 	void SetConnectionState(EHorizonWebSocketState NewState);
 	void HandleReconnection();
 	void LogMessage(const FString& Message, bool bIsError = false) const;
+	void ProcessReceivedData();
 
-	// WebSocket protocol implementation
+	// WebSocket protocol
 	bool ParseURL(const FString& URL, FString& OutHost, int32& OutPort, FString& OutPath, bool& bOutIsSecure);
 	FString GenerateWebSocketKey();
 	FString CreateHandshakeRequest(const FString& Host, const FString& Path, const FString& Key, const FString& Protocol);
 	bool ValidateHandshakeResponse(const FString& Response, const FString& Key);
-	
-	// Frame handling
-	void ProcessReceivedData();
 	bool ProcessWebSocketFrame(const TArray<uint8>& FrameData);
-	TArray<uint8> CreateWebSocketFrame(const FString& Message, bool bIsBinary = false);
-	TArray<uint8> CreateCloseFrame(uint16 Code = 1000, const FString& Reason = TEXT(""));
+	TArray<uint8> CreateWebSocketFrame(const FString& Message, bool bIsBinary);
+	TArray<uint8> CreateCloseFrame(uint16 Code, const FString& Reason);
 
-	// Event handlers (called from worker thread)
-	void OnWebSocketConnected();
-	void OnWebSocketConnectionError(const FString& Error);
-	void OnWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
-	void OnWebSocketMessage(const FString& Message);
-	void OnWebSocketRawMessage(const TArray<uint8>& Data);
-	void OnWebSocketMessageSent(const FString& Message);
+	// Worker thread event handlers
+	virtual void OnWebSocketConnected();
+	virtual void OnWebSocketConnectionError(const FString& Error);
+	virtual void OnWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
+	virtual void OnWebSocketMessage(const FString& Message);
+	virtual void OnWebSocketRawMessage(const TArray<uint8>& Data);
+	virtual void OnWebSocketMessageSent(const FString& Message);
 
-private:
-	// Connection data
-	FString ServerURL;
-	FString ServerProtocol;
-	FString ServerHost;
-	int32 ServerPort;
-	FString ServerPath;
-	bool bIsSecureConnection;
-
-	// State management
-	EHorizonWebSocketState ConnectionState;
-	int32 CurrentReconnectAttempts;
-	FThreadSafeBool bShouldShutdown;
-	FThreadSafeBool bIsReconnecting;
-
-	// Socket connection
-	FSocket* Socket;
-	
-	// Timing
-	double LastHeartbeatTime;
-	double LastMessageReceivedTime;
-	double ReconnectScheduledTime;
-
-	// Worker thread for socket operations
-	TUniquePtr<FHorizonWebSocketWorker> WebSocketWorker;
-	FRunnableThread* WorkerThread;
-
-	// Message queues (thread-safe)
-	TQueue<FString> OutgoingMessages;
-	TQueue<TArray<uint8>> OutgoingBinaryMessages;
-	TQueue<TArray<uint8>> IncomingData;
-
-	// Frame buffer for partial frame reception
-	TArray<uint8> FrameBuffer;
-
-	// Thread safety
-	mutable FCriticalSection StateMutex;
-	mutable FCriticalSection SocketMutex;
+	// Immediate processing methods
+	bool SendMessageImmediate(const FString& Message);
+	bool SendBinaryMessageImmediate(const TArray<uint8>& Data);
+	void ProcessIncomingDataImmediate(const TArray<uint8>& Data);
 
 	friend class FHorizonWebSocketWorker;
 };
 
-/**
- * Worker thread for WebSocket operations
- */
-class FHorizonWebSocketWorker : public FRunnable
+class HORIZON_API FHorizonWebSocketWorker : public FRunnable
 {
 public:
 	FHorizonWebSocketWorker(UHorizonWebSocketClient* InClient);
@@ -217,18 +206,15 @@ public:
 	virtual void Stop() override;
 	virtual void Exit() override;
 
-	// Control methods
+	// Connection management
 	void StartConnection(const FString& Host, int32 Port, const FString& Path, const FString& Protocol, bool bIsSecure);
 	void StopConnection();
 
-private:
-	// WebSocket client reference
+protected:
 	UHorizonWebSocketClient* Client;
-	
-	// Worker state
 	FThreadSafeBool bStopRequested;
-	FThreadSafeBool bIsConnecting;
-	
+	bool bIsConnecting;
+
 	// Connection parameters
 	FString ConnectHost;
 	int32 ConnectPort;
@@ -236,10 +222,17 @@ private:
 	FString ConnectProtocol;
 	bool bConnectIsSecure;
 
-	// Socket operations
+	// Internal methods
 	bool PerformHandshake();
 	bool SendData(const TArray<uint8>& Data);
 	bool ReceiveData(TArray<uint8>& OutData);
-	void HandleIncomingMessages();
-	void HandleOutgoingMessages();
+	virtual void HandleIncomingMessages();
+	virtual void HandleOutgoingMessages();
+
+	// Immediate processing support
+	void ProcessIncomingMessageImmediate(const TArray<uint8>& Data);
+	bool SendMessageDataImmediate(const TArray<uint8>& FrameData);
+
+private:
+	std::atomic<bool> bProcessingMessage{false};
 };

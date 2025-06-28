@@ -11,6 +11,10 @@
 #include "Misc/Guid.h"
 #include "HAL/UnrealMemory.h"
 #include "Misc/SecureHash.h"
+#include "Sockets.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
+#include "Interfaces/IPv4/IPv4Address.h"
 
 // WebSocket magic string for handshake
 static const FString WebSocketMagicString = TEXT("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
@@ -61,7 +65,7 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
 		{
 			ReconnectScheduledTime = 0.0;
 			bIsReconnecting = false;
-			
+
 			LogMessage(FString::Printf(TEXT("Attempting reconnection %d/%d"), CurrentReconnectAttempts + 1, MaxReconnectAttempts));
 			Connect(ServerURL, ServerProtocol);
 		}
@@ -80,7 +84,7 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
 		if (TimeSinceLastMessage > TimeoutThreshold)
 		{
 			LogMessage(FString::Printf(TEXT("Connection timeout detected (%.1fs since last message)"), TimeSinceLastMessage), true);
-			
+
 			if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
 			{
 				ForceReconnect();
@@ -136,13 +140,13 @@ bool UHorizonWebSocketClient::Connect(const FString& URL, const FString& Protoco
 	}
 
 	SetConnectionState(EHorizonWebSocketState::Connecting);
-	LogMessage(FString::Printf(TEXT("Connecting to %s:%d%s (Secure: %s, Protocol: %s)"), 
+	LogMessage(FString::Printf(TEXT("Connecting to %s:%d%s (Secure: %s, Protocol: %s)"),
 		*ServerHost, ServerPort, *ServerPath, bIsSecureConnection ? TEXT("Yes") : TEXT("No"), *Protocol));
 
 	// Create and start worker thread
 	WebSocketWorker = MakeUnique<FHorizonWebSocketWorker>(this);
 	WorkerThread = FRunnableThread::Create(WebSocketWorker.Get(), TEXT("HorizonWebSocketWorker"));
-	
+
 	if (!WorkerThread)
 	{
 		LogMessage(TEXT("Failed to create worker thread"), true);
@@ -152,7 +156,7 @@ bool UHorizonWebSocketClient::Connect(const FString& URL, const FString& Protoco
 
 	// Start connection on worker thread
 	WebSocketWorker->StartConnection(ServerHost, ServerPort, ServerPath, ServerProtocol, bIsSecureConnection);
-	
+
 	return true;
 }
 
@@ -210,10 +214,10 @@ void UHorizonWebSocketClient::ForceReconnect()
 	}
 
 	LogMessage(TEXT("Force reconnecting..."));
-	
+
 	// Clean up current connection
 	CleanupWebSocket();
-	
+
 	// Schedule reconnection
 	HandleReconnection();
 }
@@ -227,23 +231,38 @@ void UHorizonWebSocketClient::SendHeartbeat()
 	}
 }
 
+FString UHorizonWebSocketClient::GetServerURL() const
+{
+	return ServerURL;
+}
+
+FString UHorizonWebSocketClient::GetServerProtocol() const
+{
+	return ServerProtocol;
+}
+
+int32 UHorizonWebSocketClient::GetCurrentReconnectAttempts() const
+{
+	return CurrentReconnectAttempts;
+}
+
 void UHorizonWebSocketClient::CleanupWebSocket()
 {
 	bShouldShutdown = true;
-	
+
 	// Stop worker thread
 	if (WebSocketWorker.IsValid())
 	{
 		WebSocketWorker->StopConnection();
 	}
-	
+
 	if (WorkerThread)
 	{
 		WorkerThread->WaitForCompletion();
 		delete WorkerThread;
 		WorkerThread = nullptr;
 	}
-	
+
 	WebSocketWorker.Reset();
 
 	// Clean up socket
@@ -263,13 +282,13 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 		FString DummyMessage;
 		OutgoingMessages.Dequeue(DummyMessage);
 	}
-	
+
 	while (!OutgoingBinaryMessages.IsEmpty())
 	{
 		TArray<uint8> DummyData;
 		OutgoingBinaryMessages.Dequeue(DummyData);
 	}
-	
+
 	while (!IncomingData.IsEmpty())
 	{
 		TArray<uint8> DummyData;
@@ -286,12 +305,12 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 void UHorizonWebSocketClient::SetConnectionState(EHorizonWebSocketState NewState)
 {
 	FScopeLock Lock(&StateMutex);
-	
+
 	if (ConnectionState != NewState)
 	{
 		EHorizonWebSocketState OldState = ConnectionState;
 		ConnectionState = NewState;
-		
+
 		LogMessage(FString::Printf(TEXT("State changed from %d to %d"), (int32)OldState, (int32)NewState));
 	}
 }
@@ -313,14 +332,14 @@ void UHorizonWebSocketClient::HandleReconnection()
 	CurrentReconnectAttempts++;
 	bIsReconnecting = true;
 	SetConnectionState(EHorizonWebSocketState::Reconnecting);
-	
+
 	// Schedule reconnection with exponential backoff
 	float DelayMultiplier = FMath::Pow(2.0f, CurrentReconnectAttempts - 1);
 	float ActualDelay = FMath::Min(ReconnectDelaySeconds * DelayMultiplier, 60.0f); // Cap at 60 seconds
-	
+
 	ReconnectScheduledTime = FPlatformTime::Seconds() + ActualDelay;
-	
-	LogMessage(FString::Printf(TEXT("Reconnection scheduled in %.1f seconds (Attempt %d/%d)"), 
+
+	LogMessage(FString::Printf(TEXT("Reconnection scheduled in %.1f seconds (Attempt %d/%d)"),
 		ActualDelay, CurrentReconnectAttempts, MaxReconnectAttempts));
 }
 
@@ -412,12 +431,12 @@ FString UHorizonWebSocketClient::GenerateWebSocketKey()
 	// Generate a random 16-byte key
 	TArray<uint8> KeyBytes;
 	KeyBytes.SetNum(16);
-	
+
 	for (int32 i = 0; i < 16; i++)
 	{
 		KeyBytes[i] = FMath::RandRange(0, 255);
 	}
-	
+
 	return FBase64::Encode(KeyBytes);
 }
 
@@ -431,14 +450,14 @@ FString UHorizonWebSocketClient::CreateHandshakeRequest(const FString& Host, con
 		"Sec-WebSocket-Key: %s\r\n"
 		"Sec-WebSocket-Version: 13\r\n"),
 		*Path, *Host, *Key);
-	
+
 	if (!Protocol.IsEmpty())
 	{
 		Request += FString::Printf(TEXT("Sec-WebSocket-Protocol: %s\r\n"), *Protocol);
 	}
-	
+
 	Request += TEXT("\r\n");
-	
+
 	return Request;
 }
 
@@ -449,25 +468,25 @@ bool UHorizonWebSocketClient::ValidateHandshakeResponse(const FString& Response,
 	{
 		return false;
 	}
-	
+
 	// Validate Sec-WebSocket-Accept
 	FString CombinedString = Key + WebSocketMagicString;
-	
+
 	// Convert to UTF-8 bytes
 	FTCHARToUTF8 UTF8String(*CombinedString);
 	TArray<uint8> StringBytes;
 	StringBytes.Append(reinterpret_cast<const uint8*>(UTF8String.Get()), UTF8String.Length());
-	
+
 	// Calculate SHA-1 hash
 	uint8 Hash[FSHA1::DigestSize];
 	FSHA1 Sha1Gen;
 	Sha1Gen.Update(StringBytes.GetData(), StringBytes.Num());
 	Sha1Gen.Final();
 	Sha1Gen.GetHash(Hash);
-	
+
 	// Encode to Base64
 	FString ExpectedAccept = FBase64::Encode(Hash, FSHA1::DigestSize);
-	
+
 	return Response.Contains(FString::Printf(TEXT("Sec-WebSocket-Accept: %s"), *ExpectedAccept));
 }
 
@@ -477,7 +496,7 @@ void UHorizonWebSocketClient::ProcessReceivedData()
 	while (IncomingData.Dequeue(NewData))
 	{
 		FrameBuffer.Append(NewData);
-		
+
 		// Process complete frames
 		while (ProcessWebSocketFrame(FrameBuffer))
 		{
@@ -495,20 +514,20 @@ bool UHorizonWebSocketClient::ProcessWebSocketFrame(const TArray<uint8>& FrameDa
 
 	uint8 FirstByte = FrameData[0];
 	uint8 SecondByte = FrameData[1];
-	
+
 	bool bFinal = (FirstByte & 0x80) != 0;
 	uint8 Opcode = FirstByte & 0x0F;
 	bool bMasked = (SecondByte & 0x80) != 0;
 	uint64 PayloadLength = SecondByte & 0x7F;
-	
+
 	int32 HeaderSize = 2;
-	
+
 	// Calculate extended payload length
 	if (PayloadLength == 126)
 	{
 		if (FrameData.Num() < HeaderSize + 2)
 			return false;
-			
+
 		PayloadLength = (FrameData[HeaderSize] << 8) | FrameData[HeaderSize + 1];
 		HeaderSize += 2;
 	}
@@ -516,7 +535,7 @@ bool UHorizonWebSocketClient::ProcessWebSocketFrame(const TArray<uint8>& FrameDa
 	{
 		if (FrameData.Num() < HeaderSize + 8)
 			return false;
-			
+
 		PayloadLength = 0;
 		for (int32 i = 0; i < 8; i++)
 		{
@@ -524,13 +543,13 @@ bool UHorizonWebSocketClient::ProcessWebSocketFrame(const TArray<uint8>& FrameDa
 		}
 		HeaderSize += 8;
 	}
-	
+
 	// Check if we have the complete frame
 	if (FrameData.Num() < HeaderSize + PayloadLength)
 	{
 		return false; // Incomplete frame
 	}
-	
+
 	// Extract payload
 	TArray<uint8> Payload;
 	if (PayloadLength > 0)
@@ -538,85 +557,85 @@ bool UHorizonWebSocketClient::ProcessWebSocketFrame(const TArray<uint8>& FrameDa
 		Payload.SetNum(PayloadLength);
 		FMemory::Memcpy(Payload.GetData(), FrameData.GetData() + HeaderSize, PayloadLength);
 	}
-	
+
 	// Handle different opcodes
 	switch (Opcode)
 	{
-		case 0x1: // Text frame
-		{
-			FString Message = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData())));
-			LastMessageReceivedTime = FPlatformTime::Seconds();
-			
-			// Broadcast on game thread
-			AsyncTask(ENamedThreads::GameThread, [this, Message]()
+	case 0x1: // Text frame
+	{
+		FString Message = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData())));
+		LastMessageReceivedTime = FPlatformTime::Seconds();
+
+		// Broadcast on game thread
+		AsyncTask(ENamedThreads::GameThread, [this, Message]()
 			{
 				if (IsValid(this))
 				{
 					OnMessage.Broadcast(Message);
 				}
 			});
-			break;
-		}
-		case 0x2: // Binary frame
-		{
-			LastMessageReceivedTime = FPlatformTime::Seconds();
-			
-			// Broadcast on game thread
-			AsyncTask(ENamedThreads::GameThread, [this, Payload]()
+		break;
+	}
+	case 0x2: // Binary frame
+	{
+		LastMessageReceivedTime = FPlatformTime::Seconds();
+
+		// Broadcast on game thread
+		AsyncTask(ENamedThreads::GameThread, [this, Payload]()
 			{
 				if (IsValid(this))
 				{
 					OnRawMessage.Broadcast(Payload, Payload.Num(), 0);
 				}
 			});
-			break;
-		}
-		case 0x8: // Close frame
+		break;
+	}
+	case 0x8: // Close frame
+	{
+		uint16 CloseCode = 1000;
+		FString CloseReason;
+
+		if (PayloadLength >= 2)
 		{
-			uint16 CloseCode = 1000;
-			FString CloseReason;
-			
-			if (PayloadLength >= 2)
+			CloseCode = (Payload[0] << 8) | Payload[1];
+			if (PayloadLength > 2)
 			{
-				CloseCode = (Payload[0] << 8) | Payload[1];
-				if (PayloadLength > 2)
-				{
-					CloseReason = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData() + 2)));
-				}
+				CloseReason = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData() + 2)));
 			}
-			
-			// Broadcast on game thread
-			AsyncTask(ENamedThreads::GameThread, [this, CloseCode, CloseReason]()
+		}
+
+		// Broadcast on game thread
+		AsyncTask(ENamedThreads::GameThread, [this, CloseCode, CloseReason]()
 			{
 				if (IsValid(this))
 				{
 					OnClosed.Broadcast(CloseCode, CloseReason, true);
 				}
 			});
-			
-			CleanupWebSocket();
-			break;
-		}
-		case 0x9: // Ping frame
-		{
-			// Send pong response
-			TArray<uint8> PongFrame = CreateWebSocketFrame(TEXT(""), false);
-			PongFrame[0] = (PongFrame[0] & 0xF0) | 0x0A; // Change opcode to pong
-			OutgoingBinaryMessages.Enqueue(PongFrame);
-			break;
-		}
-		case 0xA: // Pong frame
-		{
-			// Handle pong (heartbeat response)
-			LastMessageReceivedTime = FPlatformTime::Seconds();
-			break;
-		}
+
+		CleanupWebSocket();
+		break;
 	}
-	
+	case 0x9: // Ping frame
+	{
+		// Send pong response
+		TArray<uint8> PongFrame = CreateWebSocketFrame(TEXT(""), false);
+		PongFrame[0] = (PongFrame[0] & 0xF0) | 0x0A; // Change opcode to pong
+		OutgoingBinaryMessages.Enqueue(PongFrame);
+		break;
+	}
+	case 0xA: // Pong frame
+	{
+		// Handle pong (heartbeat response)
+		LastMessageReceivedTime = FPlatformTime::Seconds();
+		break;
+	}
+	}
+
 	// Remove processed frame from buffer
 	int32 FrameSize = HeaderSize + PayloadLength;
 	FrameBuffer.RemoveAt(0, FrameSize);
-	
+
 	return true;
 }
 
@@ -624,7 +643,7 @@ TArray<uint8> UHorizonWebSocketClient::CreateWebSocketFrame(const FString& Messa
 {
 	TArray<uint8> Frame;
 	TArray<uint8> Payload;
-	
+
 	if (bIsBinary)
 	{
 		// For binary, convert string to UTF-8
@@ -637,11 +656,11 @@ TArray<uint8> UHorizonWebSocketClient::CreateWebSocketFrame(const FString& Messa
 		FTCHARToUTF8 UTF8String(*Message);
 		Payload.Append(reinterpret_cast<const uint8*>(UTF8String.Get()), UTF8String.Length());
 	}
-	
+
 	// First byte: FIN=1, RSV=000, Opcode
 	uint8 FirstByte = 0x80 | (bIsBinary ? 0x02 : 0x01);
 	Frame.Add(FirstByte);
-	
+
 	// Second byte and payload length
 	uint64 PayloadLength = Payload.Num();
 	if (PayloadLength < 126)
@@ -662,7 +681,7 @@ TArray<uint8> UHorizonWebSocketClient::CreateWebSocketFrame(const FString& Messa
 			Frame.Add((PayloadLength >> (i * 8)) & 0xFF);
 		}
 	}
-	
+
 	// Masking key (required for client frames)
 	TArray<uint8> MaskKey;
 	for (int32 i = 0; i < 4; i++)
@@ -671,13 +690,13 @@ TArray<uint8> UHorizonWebSocketClient::CreateWebSocketFrame(const FString& Messa
 		MaskKey.Add(MaskByte);
 		Frame.Add(MaskByte);
 	}
-	
+
 	// Masked payload
 	for (int32 i = 0; i < Payload.Num(); i++)
 	{
 		Frame.Add(Payload[i] ^ MaskKey[i % 4]);
 	}
-	
+
 	return Frame;
 }
 
@@ -685,28 +704,28 @@ TArray<uint8> UHorizonWebSocketClient::CreateCloseFrame(uint16 Code, const FStri
 {
 	TArray<uint8> Frame;
 	TArray<uint8> Payload;
-	
+
 	// Add close code
 	Payload.Add((Code >> 8) & 0xFF);
 	Payload.Add(Code & 0xFF);
-	
+
 	// Add reason
 	if (!Reason.IsEmpty())
 	{
 		FTCHARToUTF8 UTF8Reason(*Reason);
 		Payload.Append(reinterpret_cast<const uint8*>(UTF8Reason.Get()), UTF8Reason.Length());
 	}
-	
+
 	// Create frame header
 	Frame.Add(0x88); // FIN=1, Opcode=8 (close)
-	
+
 	uint64 PayloadLength = Payload.Num();
 	if (PayloadLength < 126)
 	{
 		Frame.Add(0x80 | static_cast<uint8>(PayloadLength));
 	}
 	// Note: Close frames typically don't exceed 125 bytes
-	
+
 	// Masking key
 	TArray<uint8> MaskKey;
 	for (int32 i = 0; i < 4; i++)
@@ -715,13 +734,13 @@ TArray<uint8> UHorizonWebSocketClient::CreateCloseFrame(uint16 Code, const FStri
 		MaskKey.Add(MaskByte);
 		Frame.Add(MaskByte);
 	}
-	
+
 	// Masked payload
 	for (int32 i = 0; i < Payload.Num(); i++)
 	{
 		Frame.Add(Payload[i] ^ MaskKey[i % 4]);
 	}
-	
+
 	return Frame;
 }
 
@@ -736,12 +755,12 @@ void UHorizonWebSocketClient::OnWebSocketConnected()
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this]()
-	{
-		if (IsValid(this))
 		{
-			OnConnected.Broadcast(true);
-		}
-	});
+			if (IsValid(this))
+			{
+				OnConnected.Broadcast(true);
+			}
+		});
 }
 
 void UHorizonWebSocketClient::OnWebSocketConnectionError(const FString& Error)
@@ -751,12 +770,12 @@ void UHorizonWebSocketClient::OnWebSocketConnectionError(const FString& Error)
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, Error]()
-	{
-		if (IsValid(this))
 		{
-			OnConnectionError.Broadcast(Error);
-		}
-	});
+			if (IsValid(this))
+			{
+				OnConnectionError.Broadcast(Error);
+			}
+		});
 
 	// Handle reconnection if enabled
 	if (bAutoReconnect && !bShouldShutdown)
@@ -767,19 +786,19 @@ void UHorizonWebSocketClient::OnWebSocketConnectionError(const FString& Error)
 
 void UHorizonWebSocketClient::OnWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
 {
-	LogMessage(FString::Printf(TEXT("WebSocket closed - Code: %d, Reason: %s, Clean: %s"), 
+	LogMessage(FString::Printf(TEXT("WebSocket closed - Code: %d, Reason: %s, Clean: %s"),
 		StatusCode, *Reason, bWasClean ? TEXT("Yes") : TEXT("No")));
 
 	SetConnectionState(EHorizonWebSocketState::Disconnected);
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, StatusCode, Reason, bWasClean]()
-	{
-		if (IsValid(this))
 		{
-			OnClosed.Broadcast(StatusCode, Reason, bWasClean);
-		}
-	});
+			if (IsValid(this))
+			{
+				OnClosed.Broadcast(StatusCode, Reason, bWasClean);
+			}
+		});
 
 	// Handle reconnection if it wasn't a clean close and reconnection is enabled
 	if (!bWasClean && bAutoReconnect && !bShouldShutdown)
@@ -795,12 +814,12 @@ void UHorizonWebSocketClient::OnWebSocketMessage(const FString& Message)
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, Message]()
-	{
-		if (IsValid(this))
 		{
-			OnMessage.Broadcast(Message);
-		}
-	});
+			if (IsValid(this))
+			{
+				OnMessage.Broadcast(Message);
+			}
+		});
 }
 
 void UHorizonWebSocketClient::OnWebSocketRawMessage(const TArray<uint8>& Data)
@@ -810,12 +829,12 @@ void UHorizonWebSocketClient::OnWebSocketRawMessage(const TArray<uint8>& Data)
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, Data]()
-	{
-		if (IsValid(this))
 		{
-			OnRawMessage.Broadcast(Data, Data.Num(), 0);
-		}
-	});
+			if (IsValid(this))
+			{
+				OnRawMessage.Broadcast(Data, Data.Num(), 0);
+			}
+		});
 }
 
 void UHorizonWebSocketClient::OnWebSocketMessageSent(const FString& Message)
@@ -825,12 +844,12 @@ void UHorizonWebSocketClient::OnWebSocketMessageSent(const FString& Message)
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, Message]()
-	{
-		if (IsValid(this))
 		{
-			OnMessageSent.Broadcast(Message);
-		}
-	});
+			if (IsValid(this))
+			{
+				OnMessageSent.Broadcast(Message);
+			}
+		});
 }
 
 // Worker Thread Implementation
@@ -863,7 +882,7 @@ uint32 FHorizonWebSocketWorker::Run()
 				// Connection successful
 				Client->OnWebSocketConnected();
 				bIsConnecting = false;
-				
+
 				// Main message loop
 				while (!bStopRequested && Client->IsConnected())
 				{
@@ -884,7 +903,7 @@ uint32 FHorizonWebSocketWorker::Run()
 			FPlatformProcess::Sleep(0.1f); // 100ms sleep when not connecting
 		}
 	}
-	
+
 	return 0;
 }
 
@@ -921,7 +940,7 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 	{
 		return false;
 	}
-	
+
 	{
 		FScopeLock Lock(&Client->SocketMutex);
 		Client->Socket = SocketSubsystem->CreateSocket(NAME_Stream, TEXT("HorizonWebSocket"));
@@ -930,56 +949,46 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 			return false;
 		}
 	}
-	
-	// Resolve address
-	auto ResolveInfo = SocketSubsystem->GetHostByName(TCHAR_TO_ANSI(*ConnectHost));
-	while (!ResolveInfo->IsComplete())
-	{
-		FPlatformProcess::Sleep(0.01f);
-		if (bStopRequested)
-		{
-			return false;
-		}
-	}
-	
-	if (ResolveInfo->GetErrorCode() != 0)
+
+	// Resolve address using modern UE5.6 API
+	FAddressInfoResult AddressInfo = SocketSubsystem->GetAddressInfo(*ConnectHost, nullptr, EAddressInfoFlags::Default, NAME_None);
+	if (AddressInfo.ReturnCode != SE_NO_ERROR || AddressInfo.Results.Num() == 0)
 	{
 		return false;
 	}
-	
-	// Connect to server
-	TSharedRef<FInternetAddr> Addr = SocketSubsystem->CreateInternetAddr();
-	Addr->SetIp(ResolveInfo->GetResolvedAddress().Addr);
+
+	// Use the first address result
+	TSharedRef<FInternetAddr> Addr = AddressInfo.Results[0].Address;
 	Addr->SetPort(ConnectPort);
-	
+
 	if (!Client->Socket->Connect(*Addr))
 	{
 		return false;
 	}
-	
+
 	// Perform WebSocket handshake
 	FString WebSocketKey = Client->GenerateWebSocketKey();
 	FString HandshakeRequest = Client->CreateHandshakeRequest(ConnectHost, ConnectPath, WebSocketKey, ConnectProtocol);
-	
+
 	// Send handshake request
 	TArray<uint8> RequestData;
 	FTCHARToUTF8 UTF8Request(*HandshakeRequest);
 	RequestData.Append(reinterpret_cast<const uint8*>(UTF8Request.Get()), UTF8Request.Length());
-	
+
 	if (!SendData(RequestData))
 	{
 		return false;
 	}
-	
+
 	// Read handshake response
 	TArray<uint8> ResponseData;
 	if (!ReceiveData(ResponseData))
 	{
 		return false;
 	}
-	
+
 	FString Response = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(ResponseData.GetData())));
-	
+
 	return Client->ValidateHandshakeResponse(Response, WebSocketKey);
 }
 
@@ -990,7 +999,7 @@ bool FHorizonWebSocketWorker::SendData(const TArray<uint8>& Data)
 	{
 		return false;
 	}
-	
+
 	int32 BytesSent = 0;
 	return Client->Socket->Send(Data.GetData(), Data.Num(), BytesSent) && BytesSent == Data.Num();
 }
@@ -1002,7 +1011,7 @@ bool FHorizonWebSocketWorker::ReceiveData(TArray<uint8>& OutData)
 	{
 		return false;
 	}
-	
+
 	uint32 PendingDataSize = 0;
 	if (!Client->Socket->HasPendingData(PendingDataSize) || PendingDataSize == 0)
 	{
@@ -1011,13 +1020,13 @@ bool FHorizonWebSocketWorker::ReceiveData(TArray<uint8>& OutData)
 		{
 			return false;
 		}
-		
+
 		if (!Client->Socket->HasPendingData(PendingDataSize) || PendingDataSize == 0)
 		{
 			return false;
 		}
 	}
-	
+
 	OutData.SetNum(PendingDataSize);
 	int32 BytesRead = 0;
 	return Client->Socket->Recv(OutData.GetData(), PendingDataSize, BytesRead) && BytesRead > 0;
@@ -1044,7 +1053,7 @@ void FHorizonWebSocketWorker::HandleOutgoingMessages()
 			Client->OnWebSocketMessageSent(OutgoingMessage);
 		}
 	}
-	
+
 	// Handle binary messages
 	TArray<uint8> OutgoingBinary;
 	while (Client->OutgoingBinaryMessages.Dequeue(OutgoingBinary))

@@ -1,4 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -14,3 +13,16 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHorizonWebSocketClosed, int32,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHorizonWebSocketMessage, const FString&, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHorizonWebSocketRawMessage, const TArray<uint8>&, Data, int32, Size, int32, BytesRemaining);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHorizonWebSocketMessageSent, const FString&, Message);
+
+/**
+ * Dummy class to ensure Unreal Header Tool processes this file
+ * This class exists solely to trigger UHT processing of the delegate declarations above
+ */
+UCLASS()
+class HORIZON_API UHorizonDelegateContainer : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UHorizonDelegateContainer() {}
+};
