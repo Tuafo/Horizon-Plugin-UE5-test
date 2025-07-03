@@ -7,9 +7,12 @@
 
 // Forward declarations
 class UHorizonWebSocketClient;
+class FHorizonWebSocketSender;
+class FHorizonWebSocketReceiver;
 
 class HORIZON_API FHorizonWebSocketWorker : public FRunnable
 {
+	friend class UHorizonWebSocketClient;
 public:
 	FHorizonWebSocketWorker(UHorizonWebSocketClient* InClient);
 	virtual ~FHorizonWebSocketWorker();
@@ -35,6 +38,10 @@ protected:
 	FString ConnectPath;
 	FString ConnectProtocol;
 	bool bConnectIsSecure;
+
+	// Sender and Receiver
+	TUniquePtr<FHorizonWebSocketSender> Sender;
+	TUniquePtr<FHorizonWebSocketReceiver> Receiver;
 
 	// Internal methods
 	bool PerformHandshake();

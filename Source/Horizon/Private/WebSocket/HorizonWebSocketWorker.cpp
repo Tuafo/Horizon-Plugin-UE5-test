@@ -1,6 +1,8 @@
 #include "WebSocket/HorizonWebSocketWorker.h"
 #include "WebSocket/HorizonWebSocketClient.h"
 #include "WebSocket/HorizonWebSocketProtocol.h"
+#include "WebSocket/HorizonWebSocketSender.h"
+#include "WebSocket/HorizonWebSocketReceiver.h"
 #include "Core/Horizon.h"
 #include "HAL/PlatformProcess.h"
 #include "Sockets.h"
@@ -14,6 +16,8 @@ FHorizonWebSocketWorker::FHorizonWebSocketWorker(UHorizonWebSocketClient* InClie
 	, ConnectPort(0)
 	, bConnectIsSecure(false)
 {
+	Sender = MakeUnique<FHorizonWebSocketSender>(InClient);
+	Receiver = MakeUnique<FHorizonWebSocketReceiver>(InClient);
 }
 
 FHorizonWebSocketWorker::~FHorizonWebSocketWorker()
@@ -40,8 +44,8 @@ uint32 FHorizonWebSocketWorker::Run()
 				// Main message loop
 				while (!bStopRequested && Client->IsConnected())
 				{
-					HandleIncomingMessages();
-					HandleOutgoingMessages();
+					Receiver->HandleIncomingMessages();
+					Sender->HandleOutgoingMessages();
 					FPlatformProcess::Sleep(0.01f); // 10ms sleep
 				}
 			}
@@ -92,6 +96,7 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 	ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
 	if (!SocketSubsystem)
 	{
+		UE_LOG(LogHorizon, Error, TEXT("Failed to get socket subsystem"));
 		return false;
 	}
 
@@ -100,6 +105,7 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 		Client->Socket = SocketSubsystem->CreateSocket(NAME_Stream, TEXT("HorizonWebSocket"));
 		if (!Client->Socket)
 		{
+			UE_LOG(LogHorizon, Error, TEXT("Failed to create socket"));
 			return false;
 		}
 	}
@@ -108,6 +114,7 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 	FAddressInfoResult AddressInfo = SocketSubsystem->GetAddressInfo(*ConnectHost, nullptr, EAddressInfoFlags::Default, NAME_None);
 	if (AddressInfo.ReturnCode != SE_NO_ERROR || AddressInfo.Results.Num() == 0)
 	{
+		UE_LOG(LogHorizon, Error, TEXT("Failed to resolve host: %s, Error: %d"), *ConnectHost, AddressInfo.ReturnCode);
 		return false;
 	}
 
@@ -115,122 +122,105 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 	TSharedRef<FInternetAddr> Addr = AddressInfo.Results[0].Address;
 	Addr->SetPort(ConnectPort);
 
+	UE_LOG(LogHorizon, Log, TEXT("Connecting to %s:%d"), *ConnectHost, ConnectPort);
+	
 	if (!Client->Socket->Connect(*Addr))
 	{
+		UE_LOG(LogHorizon, Error, TEXT("Socket connection failed to %s:%d"), *ConnectHost, ConnectPort);
 		return false;
 	}
+
+	UE_LOG(LogHorizon, Log, TEXT("Socket connected, performing WebSocket handshake"));
 
 	// Perform WebSocket handshake
 	FString WebSocketKey = FHorizonWebSocketProtocol::GenerateWebSocketKey();
 	FString HandshakeRequest = FHorizonWebSocketProtocol::CreateHandshakeRequest(ConnectHost, ConnectPort, bConnectIsSecure, ConnectPath, WebSocketKey, ConnectProtocol);
+
+	UE_LOG(LogHorizon, Verbose, TEXT("Sending handshake request:\n%s"), *HandshakeRequest);
 
 	// Send handshake request
 	TArray<uint8> RequestData;
 	FTCHARToUTF8 UTF8Request(*HandshakeRequest);
 	RequestData.Append(reinterpret_cast<const uint8*>(UTF8Request.Get()), UTF8Request.Length());
 
-	if (!SendData(RequestData))
+	if (!Sender->SendData(RequestData))
 	{
+		UE_LOG(LogHorizon, Error, TEXT("Failed to send handshake request"));
 		return false;
 	}
 
 	// Read handshake response
 	TArray<uint8> ResponseData;
-	if (!ReceiveData(ResponseData))
+	if (!Receiver->ReceiveData(ResponseData))
 	{
+		UE_LOG(LogHorizon, Error, TEXT("Failed to receive handshake response"));
 		return false;
 	}
 
 	FString Response = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(ResponseData.GetData())));
+	UE_LOG(LogHorizon, Verbose, TEXT("Received handshake response:\n%s"), *Response);
 
-	return FHorizonWebSocketProtocol::ValidateHandshakeResponse(Response, WebSocketKey);
+	bool bValidHandshake = FHorizonWebSocketProtocol::ValidateHandshakeResponse(Response, WebSocketKey);
+	
+	if (bValidHandshake)
+	{
+		UE_LOG(LogHorizon, Log, TEXT("WebSocket handshake successful"));
+	}
+	else
+	{
+		UE_LOG(LogHorizon, Error, TEXT("WebSocket handshake validation failed"));
+	}
+	
+	return bValidHandshake;
 }
 
 bool FHorizonWebSocketWorker::SendData(const TArray<uint8>& Data)
 {
-	FScopeLock Lock(&Client->SocketMutex);
-	if (!Client->Socket)
+	if (Sender.IsValid())
 	{
-		return false;
+		return Sender->SendData(Data);
 	}
-
-	int32 BytesSent = 0;
-	return Client->Socket->Send(Data.GetData(), Data.Num(), BytesSent) && BytesSent == Data.Num();
+	return false;
 }
 
 bool FHorizonWebSocketWorker::ReceiveData(TArray<uint8>& OutData)
 {
-	FScopeLock Lock(&Client->SocketMutex);
-	if (!Client->Socket)
+	if (Receiver.IsValid())
 	{
-		return false;
+		return Receiver->ReceiveData(OutData);
 	}
-
-	uint32 PendingDataSize = 0;
-	if (!Client->Socket->HasPendingData(PendingDataSize) || PendingDataSize == 0)
-	{
-		// Wait for data with timeout
-		if (!Client->Socket->Wait(ESocketWaitConditions::WaitForRead, FTimespan::FromSeconds(5)))
-		{
-			return false;
-		}
-
-		if (!Client->Socket->HasPendingData(PendingDataSize) || PendingDataSize == 0)
-		{
-			return false;
-		}
-	}
-
-	OutData.SetNum(PendingDataSize);
-	int32 BytesRead = 0;
-	return Client->Socket->Recv(OutData.GetData(), PendingDataSize, BytesRead) && BytesRead > 0;
+	return false;
 }
 
 void FHorizonWebSocketWorker::HandleIncomingMessages()
 {
-	TArray<uint8> IncomingData;
-	if (ReceiveData(IncomingData))
+	if (Receiver.IsValid())
 	{
-		Client->IncomingData.Enqueue(IncomingData);
+		Receiver->HandleIncomingMessages();
 	}
 }
 
 void FHorizonWebSocketWorker::HandleOutgoingMessages()
 {
-	// Handle text messages
-	FString OutgoingMessage;
-	while (Client->OutgoingMessages.Dequeue(OutgoingMessage))
+	if (Sender.IsValid())
 	{
-		TArray<uint8> Frame = FHorizonWebSocketProtocol::CreateWebSocketFrame(OutgoingMessage, false);
-		if (SendData(Frame))
-		{
-			Client->OnWebSocketMessageSent(OutgoingMessage);
-		}
-	}
-
-	// Handle binary messages
-	TArray<uint8> OutgoingBinary;
-	while (Client->OutgoingBinaryMessages.Dequeue(OutgoingBinary))
-	{
-		if (SendData(OutgoingBinary))
-		{
-			// For binary messages, we'll just log the size
-			Client->OnWebSocketMessageSent(FString::Printf(TEXT("Binary data (%d bytes)"), OutgoingBinary.Num()));
-		}
+		Sender->HandleOutgoingMessages();
 	}
 }
 
 void FHorizonWebSocketWorker::ProcessIncomingMessageImmediate(const TArray<uint8>& Data)
 {
-	// This function is intended to be part of an immediate processing mode,
-	// which is not fully implemented in the provided code.
-	// We'll leave it as a placeholder.
+	if (Receiver.IsValid())
+	{
+		Receiver->ProcessIncomingMessageImmediate(Data);
+	}
 }
 
 bool FHorizonWebSocketWorker::SendMessageDataImmediate(const TArray<uint8>& FrameData)
 {
-	// This function is intended to be part of an immediate processing mode,
-	// which is not fully implemented in the provided code.
-	// We'll leave it as a placeholder.
-	return SendData(FrameData);
-} 
+	if (Sender.IsValid())
+	{
+		return Sender->SendMessageDataImmediate(FrameData);
+	}
+	return false;
+}

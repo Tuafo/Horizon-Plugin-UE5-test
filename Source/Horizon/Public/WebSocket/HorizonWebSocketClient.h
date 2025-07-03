@@ -29,6 +29,8 @@ enum class EHorizonWebSocketState : uint8
 
 // Forward declarations
 class FHorizonWebSocketWorker;
+class FHorizonWebSocketSender;
+class FHorizonWebSocketReceiver;
 
 UCLASS(BlueprintType, Blueprintable)
 class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGameObject
@@ -127,10 +129,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
 	bool bImmediateProcessing = false;
 	
+	// Interface methods for sender and receiver
+	bool SendSocketData(const TArray<uint8>& Data);
+	bool ReceiveSocketData(TArray<uint8>& OutData);
+	void EnqueueIncomingData(const TArray<uint8>& Data);
+	bool DequeueOutgoingMessage(FString& OutMessage);
+	bool DequeueOutgoingBinaryMessage(TArray<uint8>& OutData);
+	void LogSocketMessage(const FString& Message, bool bIsError = false) const;
+	
 protected:
 	// Internal connection state
 	mutable FCriticalSection StateMutex;
 	EHorizonWebSocketState ConnectionState;
+	FThreadSafeBool bConnectionEstablished;
 
 	// Reconnection handling
 	int32 CurrentReconnectAttempts;
@@ -158,8 +169,8 @@ protected:
 	TQueue<FString, EQueueMode::Mpsc> OutgoingMessages;
 	TQueue<TArray<uint8>, EQueueMode::Mpsc> OutgoingBinaryMessages;
 	TQueue<TArray<uint8>, EQueueMode::Mpsc> IncomingData;
-
-	// Frame processing
+	
+	// Frame buffer for processing WebSocket frames
 	TArray<uint8> FrameBuffer;
 
 	// Internal methods
@@ -167,16 +178,7 @@ protected:
 	void SetConnectionState(EHorizonWebSocketState NewState);
 	void HandleReconnection();
 	void LogMessage(const FString& Message, bool bIsError = false) const;
-	void ProcessReceivedData();
-
-	// WebSocket protocol
 	bool ParseURL(const FString& URL, FString& OutHost, int32& OutPort, FString& OutPath, bool& bOutIsSecure);
-	FString GenerateWebSocketKey();
-	FString CreateHandshakeRequest(const FString& Host, const FString& Path, const FString& Key, const FString& Protocol);
-	bool ValidateHandshakeResponse(const FString& Response, const FString& Key);
-	bool ProcessWebSocketFrame(const TArray<uint8>& FrameData);
-	TArray<uint8> CreateWebSocketFrame(const FString& Message, bool bIsBinary);
-	TArray<uint8> CreateCloseFrame(uint16 Code, const FString& Reason);
 
 	// Worker thread event handlers
 	virtual void OnWebSocketConnected();
@@ -186,10 +188,7 @@ protected:
 	virtual void OnWebSocketRawMessage(const TArray<uint8>& Data);
 	virtual void OnWebSocketMessageSent(const FString& Message);
 
-	// Immediate processing methods
-	bool SendMessageImmediate(const FString& Message);
-	bool SendBinaryMessageImmediate(const TArray<uint8>& Data);
-	void ProcessIncomingDataImmediate(const TArray<uint8>& Data);
-
 	friend class FHorizonWebSocketWorker;
+	friend class FHorizonWebSocketSender;
+	friend class FHorizonWebSocketReceiver;
 };

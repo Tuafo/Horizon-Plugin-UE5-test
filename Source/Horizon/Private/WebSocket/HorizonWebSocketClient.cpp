@@ -18,15 +18,17 @@
 
 UHorizonWebSocketClient::UHorizonWebSocketClient()
 	: ConnectionState(EHorizonWebSocketState::Disconnected)
-	, CurrentReconnectAttempts(0)
-	, bShouldShutdown(false)
-	, bIsReconnecting(false)
-	, LastHeartbeatTime(0.0)
-	, LastMessageReceivedTime(0.0)
-	, ReconnectScheduledTime(0.0)
-	, Socket(nullptr)
-	, ServerPort(0)
-	, bIsSecureConnection(false)
+	  , bConnectionEstablished(false)
+	  , CurrentReconnectAttempts(0)
+	  , bShouldShutdown(false)
+	  , bIsReconnecting(false)
+	  , LastHeartbeatTime(0.0)
+	  , LastMessageReceivedTime(0.0)
+	  , ReconnectScheduledTime(0.0)
+	  , Socket(nullptr)
+	  , ServerPort(0)
+	  , bIsSecureConnection(false),
+		WorkerThread(nullptr)
 {
 	// Initialize with current time
 	LastHeartbeatTime = FPlatformTime::Seconds();
@@ -69,7 +71,76 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
 	}
 
 	// Process incoming data
-	ProcessReceivedData();
+	TArray<uint8> NewData;
+	while (IncomingData.Dequeue(NewData))
+	{
+		FrameBuffer.Append(NewData);
+		
+		// Process complete frames
+		bool bIsFinal;
+		uint8 Opcode;
+		TArray<uint8> Payload;
+		while (FHorizonWebSocketProtocol::ProcessWebSocketFrame(FrameBuffer, bIsFinal, Opcode, Payload))
+		{
+			// Handle different opcodes
+			switch (Opcode)
+			{
+			case 0x1: // Text frame
+				{
+					FString Message = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData())));
+					
+					// Update last message received time
+					LastMessageReceivedTime = FPlatformTime::Seconds();
+
+					// Broadcast on game thread
+					OnMessage.Broadcast(Message);
+					break;
+				}
+			case 0x2: // Binary frame
+				{
+					// Update last message received time
+					LastMessageReceivedTime = FPlatformTime::Seconds();
+
+					// Broadcast directly as we're already on game thread
+					OnRawMessage.Broadcast(Payload, Payload.Num(), 0);
+					break;
+				}
+			case 0x8: // Close frame
+				{
+					uint16 CloseCode = 1000;
+					FString CloseReason;
+
+					if (Payload.Num() >= 2)
+					{
+						CloseCode = (Payload[0] << 8) | Payload[1];
+						if (Payload.Num() > 2)
+						{
+							CloseReason = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData() + 2)));
+						}
+					}
+
+					// Broadcast directly as we're already on game thread
+					OnClosed.Broadcast(CloseCode, CloseReason, true);
+					CleanupWebSocket();
+					break;
+				}
+			case 0x9: // Ping frame
+				{
+					// Send pong response
+					TArray<uint8> PongFrame = FHorizonWebSocketProtocol::CreateWebSocketFrame(TEXT(""), false);
+					PongFrame[0] = (PongFrame[0] & 0xF0) | 0x0A; // Change opcode to pong
+					OutgoingBinaryMessages.Enqueue(PongFrame);
+					break;
+				}
+			case 0xA: // Pong frame
+				{
+					// Handle pong (heartbeat response)
+					LastMessageReceivedTime = FPlatformTime::Seconds();
+					break;
+				}
+			}
+		}
+	}
 
 	// Check for connection timeout if heartbeat is enabled
 	if (bEnableHeartbeat && IsConnected())
@@ -167,11 +238,17 @@ void UHorizonWebSocketClient::Disconnect()
 
 bool UHorizonWebSocketClient::SendMessage(const FString& Message)
 {
-	if (!IsConnected() || Message.IsEmpty())
+	if (Message.IsEmpty())
 	{
 		return false;
 	}
 	
+	if (!bConnectionEstablished)
+	{
+		LogMessage(FString::Printf(TEXT("Cannot send message, not connected: %s"), *Message), true);
+		return false;
+	}
+
 	// Add to outgoing queue
 	OutgoingMessages.Enqueue(Message);
 	LogMessage(FString::Printf(TEXT("Queued message: %s"), *Message));
@@ -180,8 +257,14 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message)
 
 bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data)
 {
-	if (!IsConnected() || Data.Num() == 0)
+	if (Data.Num() == 0)
 	{
+		return false;
+	}
+	
+	if (!bConnectionEstablished)
+	{
+		LogMessage(FString::Printf(TEXT("Cannot send binary message, not connected: %d bytes"), Data.Num()), true);
 		return false;
 	}
 
@@ -193,8 +276,8 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data)
 
 bool UHorizonWebSocketClient::IsConnected() const
 {
-	FScopeLock Lock(&StateMutex);
-	return ConnectionState == EHorizonWebSocketState::Connected && Socket != nullptr;
+	// Use the thread-safe flag instead of checking socket directly
+	return bConnectionEstablished;
 }
 
 EHorizonWebSocketState UHorizonWebSocketClient::GetConnectionState() const
@@ -246,6 +329,7 @@ int32 UHorizonWebSocketClient::GetCurrentReconnectAttempts() const
 void UHorizonWebSocketClient::CleanupWebSocket()
 {
 	bShouldShutdown = true;
+	bConnectionEstablished = false;
 
 	// Stop worker thread
 	if (WebSocketWorker.IsValid())
@@ -423,101 +507,12 @@ bool UHorizonWebSocketClient::ParseURL(const FString& URL, FString& OutHost, int
 	return !OutHost.IsEmpty() && OutPort > 0;
 }
 
-void UHorizonWebSocketClient::ProcessReceivedData()
-{
-	TArray<uint8> NewData;
-	while (IncomingData.Dequeue(NewData))
-	{
-		FrameBuffer.Append(NewData);
-
-		// Process complete frames
-		bool bIsFinal;
-		uint8 Opcode;
-		TArray<uint8> Payload;
-		while (FHorizonWebSocketProtocol::ProcessWebSocketFrame(FrameBuffer, bIsFinal, Opcode, Payload))
-		{
-			// Handle different opcodes
-			switch (Opcode)
-			{
-			case 0x1: // Text frame
-			{
-				FString Message = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData())));
-				LastMessageReceivedTime = FPlatformTime::Seconds();
-
-				// Broadcast on game thread
-				AsyncTask(ENamedThreads::GameThread, [this, Message]()
-					{
-						if (IsValid(this))
-						{
-							OnMessage.Broadcast(Message);
-						}
-					});
-				break;
-			}
-			case 0x2: // Binary frame
-			{
-				LastMessageReceivedTime = FPlatformTime::Seconds();
-
-				// Broadcast on game thread
-				AsyncTask(ENamedThreads::GameThread, [this, Payload]()
-					{
-						if (IsValid(this))
-						{
-							OnRawMessage.Broadcast(Payload, Payload.Num(), 0);
-						}
-					});
-				break;
-			}
-			case 0x8: // Close frame
-			{
-				uint16 CloseCode = 1000;
-				FString CloseReason;
-
-				if (Payload.Num() >= 2)
-				{
-					CloseCode = (Payload[0] << 8) | Payload[1];
-					if (Payload.Num() > 2)
-					{
-						CloseReason = FString(UTF8_TO_TCHAR(reinterpret_cast<const char*>(Payload.GetData() + 2)));
-					}
-				}
-
-				// Broadcast on game thread
-				AsyncTask(ENamedThreads::GameThread, [this, CloseCode, CloseReason]()
-					{
-						if (IsValid(this))
-						{
-							OnClosed.Broadcast(CloseCode, CloseReason, true);
-						}
-					});
-
-				CleanupWebSocket();
-				break;
-			}
-			case 0x9: // Ping frame
-			{
-				// Send pong response
-				TArray<uint8> PongFrame = FHorizonWebSocketProtocol::CreateWebSocketFrame(TEXT(""), false);
-				PongFrame[0] = (PongFrame[0] & 0xF0) | 0x0A; // Change opcode to pong
-				OutgoingBinaryMessages.Enqueue(PongFrame);
-				break;
-			}
-			case 0xA: // Pong frame
-			{
-				// Handle pong (heartbeat response)
-				LastMessageReceivedTime = FPlatformTime::Seconds();
-				break;
-			}
-			}
-		}
-	}
-}
-
 // Event handlers (called from worker thread, dispatched to game thread)
 void UHorizonWebSocketClient::OnWebSocketConnected()
 {
 	LogMessage(TEXT("WebSocket connected successfully"));
 	SetConnectionState(EHorizonWebSocketState::Connected);
+	bConnectionEstablished = true;
 	CurrentReconnectAttempts = 0;
 	bIsReconnecting = false;
 	LastMessageReceivedTime = FPlatformTime::Seconds();
@@ -536,6 +531,7 @@ void UHorizonWebSocketClient::OnWebSocketConnectionError(const FString& Error)
 {
 	LogMessage(FString::Printf(TEXT("Connection error: %s"), *Error), true);
 	SetConnectionState(EHorizonWebSocketState::Failed);
+	bConnectionEstablished = false;
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, Error]()
@@ -559,6 +555,7 @@ void UHorizonWebSocketClient::OnWebSocketClosed(int32 StatusCode, const FString&
 		StatusCode, *Reason, bWasClean ? TEXT("Yes") : TEXT("No")));
 
 	SetConnectionState(EHorizonWebSocketState::Disconnected);
+	bConnectionEstablished = false;
 
 	// Broadcast event on game thread
 	AsyncTask(ENamedThreads::GameThread, [this, StatusCode, Reason, bWasClean]()
@@ -621,9 +618,63 @@ void UHorizonWebSocketClient::OnWebSocketMessageSent(const FString& Message)
 		});
 }
 
-// Worker Thread Implementation - THIS WILL BE DELETED
-/*
-FHorizonWebSocketWorker::FHorizonWebSocketWorker(UHorizonWebSocketClient* InClient)
-// ... entire implementation ...
+bool UHorizonWebSocketClient::SendSocketData(const TArray<uint8>& Data)
+{
+	FScopeLock Lock(&SocketMutex);
+	if (!Socket)
+	{
+		return false;
+	}
+
+	int32 BytesSent = 0;
+	return Socket->Send(Data.GetData(), Data.Num(), BytesSent) && BytesSent == Data.Num();
 }
-*/
+
+bool UHorizonWebSocketClient::ReceiveSocketData(TArray<uint8>& OutData)
+{
+	FScopeLock Lock(&SocketMutex);
+	if (!Socket)
+	{
+		return false;
+	}
+
+	uint32 PendingDataSize = 0;
+	if (!Socket->HasPendingData(PendingDataSize) || PendingDataSize == 0)
+	{
+		// Wait for data with timeout
+		if (!Socket->Wait(ESocketWaitConditions::WaitForRead, FTimespan::FromSeconds(5)))
+		{
+			return false;
+		}
+
+		if (!Socket->HasPendingData(PendingDataSize) || PendingDataSize == 0)
+		{
+			return false;
+		}
+	}
+
+	OutData.SetNum(PendingDataSize);
+	int32 BytesRead = 0;
+	return Socket->Recv(OutData.GetData(), PendingDataSize, BytesRead) && BytesRead > 0;
+}
+
+void UHorizonWebSocketClient::EnqueueIncomingData(const TArray<uint8>& Data)
+{
+	IncomingData.Enqueue(Data);
+}
+
+bool UHorizonWebSocketClient::DequeueOutgoingMessage(FString& OutMessage)
+{
+	return OutgoingMessages.Dequeue(OutMessage);
+}
+
+bool UHorizonWebSocketClient::DequeueOutgoingBinaryMessage(TArray<uint8>& OutData)
+{
+	return OutgoingBinaryMessages.Dequeue(OutData);
+}
+
+void UHorizonWebSocketClient::LogSocketMessage(const FString& Message, bool bIsError) const
+{
+	LogMessage(Message, bIsError);
+}
+

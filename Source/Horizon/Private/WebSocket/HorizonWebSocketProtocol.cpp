@@ -117,7 +117,7 @@ bool FHorizonWebSocketProtocol::ProcessWebSocketFrame(TArray<uint8>& InOutFrameB
         OutPayload.Empty();
     }
 
-	InOutFrameBuffer.RemoveAt(0, FrameSize, false);
+	InOutFrameBuffer.RemoveAt(0, FrameSize, false); // Do not allow shrinking
 
 	return true;
 }
