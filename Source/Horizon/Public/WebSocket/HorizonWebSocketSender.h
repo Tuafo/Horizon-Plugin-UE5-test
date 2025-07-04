@@ -4,6 +4,7 @@
 #include "Containers/Queue.h"
 
 class UHorizonWebSocketClient;
+class UHorizonWebSocketComponent;
 class FSocket;
 
 class HORIZON_API FHorizonWebSocketSender
@@ -21,4 +22,6 @@ public:
 private:
     UHorizonWebSocketClient* Client;
     FCriticalSection* SocketMutex;
+    
+    friend class UHorizonWebSocketComponent;
 }; 

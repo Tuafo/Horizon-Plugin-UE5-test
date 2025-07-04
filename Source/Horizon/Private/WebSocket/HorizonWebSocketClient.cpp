@@ -1,6 +1,8 @@
 #include "WebSocket/HorizonWebSocketClient.h"
 #include "WebSocket/HorizonWebSocketWorker.h"
 #include "WebSocket/HorizonWebSocketProtocol.h"
+#include "WebSocket/HorizonWebSocketSender.h"
+#include "WebSocket/HorizonWebSocketReceiver.h"
 #include "Core/Horizon.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -272,6 +274,28 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data)
 	OutgoingBinaryMessages.Enqueue(Data);
 	LogMessage(FString::Printf(TEXT("Queued binary message: %d bytes"), Data.Num()));
 	return true;
+}
+
+bool UHorizonWebSocketClient::SendMessageImmediate(const FString& Message)
+{
+	if (!WebSocketWorker.IsValid() || !WebSocketWorker->Sender.IsValid())
+	{
+		LogMessage(TEXT("Cannot send immediate message: worker or sender not available"), true);
+		return false;
+	}
+	
+	return WebSocketWorker->Sender->SendMessageImmediate(Message);
+}
+
+bool UHorizonWebSocketClient::SendBinaryMessageImmediate(const TArray<uint8>& Data)
+{
+	if (!WebSocketWorker.IsValid() || !WebSocketWorker->Sender.IsValid())
+	{
+		LogMessage(TEXT("Cannot send immediate binary message: worker or sender not available"), true);
+		return false;
+	}
+	
+	return WebSocketWorker->Sender->SendBinaryMessageImmediate(Data);
 }
 
 bool UHorizonWebSocketClient::IsConnected() const

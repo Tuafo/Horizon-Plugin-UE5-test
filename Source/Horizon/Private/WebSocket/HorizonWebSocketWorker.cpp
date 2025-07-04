@@ -46,7 +46,7 @@ uint32 FHorizonWebSocketWorker::Run()
 				{
 					Receiver->HandleIncomingMessages();
 					Sender->HandleOutgoingMessages();
-					FPlatformProcess::Sleep(0.01f); // 10ms sleep
+					FPlatformProcess::Sleep(0.001f); // 1ms sleep for more responsive messaging
 				}
 			}
 			else
@@ -58,7 +58,7 @@ uint32 FHorizonWebSocketWorker::Run()
 		}
 		else
 		{
-			FPlatformProcess::Sleep(0.1f); // 100ms sleep when not connecting
+			FPlatformProcess::Sleep(0.01f); // 10ms sleep when not connecting
 		}
 	}
 

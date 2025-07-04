@@ -9,10 +9,12 @@
 class UHorizonWebSocketClient;
 class FHorizonWebSocketSender;
 class FHorizonWebSocketReceiver;
+class UHorizonWebSocketComponent;
 
 class HORIZON_API FHorizonWebSocketWorker : public FRunnable
 {
 	friend class UHorizonWebSocketClient;
+	friend class UHorizonWebSocketComponent;
 public:
 	FHorizonWebSocketWorker(UHorizonWebSocketClient* InClient);
 	virtual ~FHorizonWebSocketWorker();

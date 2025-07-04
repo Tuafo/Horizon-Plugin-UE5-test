@@ -76,6 +76,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messaging")
 	bool SendBinaryMessage(const TArray<uint8>& Data);
+	
+	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messaging", meta=(DisplayName="Send Message Immediate"))
+	bool SendMessageImmediate(const FString& Message);
+
+	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messaging", meta=(DisplayName="Send Binary Message Immediate"))
+	bool SendBinaryMessageImmediate(const TArray<uint8>& Data);
 
 	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Status")
 	bool IsConnected() const;

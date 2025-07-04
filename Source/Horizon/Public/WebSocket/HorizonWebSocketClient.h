@@ -31,6 +31,7 @@ enum class EHorizonWebSocketState : uint8
 class FHorizonWebSocketWorker;
 class FHorizonWebSocketSender;
 class FHorizonWebSocketReceiver;
+class UHorizonWebSocketComponent;
 
 UCLASS(BlueprintType, Blueprintable)
 class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGameObject
@@ -77,6 +78,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "WebSocket")
 	bool SendBinaryMessage(const TArray<uint8>& Data);
+	
+	UFUNCTION(BlueprintCallable, Category = "WebSocket", meta=(DisplayName="Send Message Immediate"))
+	bool SendMessageImmediate(const FString& Message);
+
+	UFUNCTION(BlueprintCallable, Category = "WebSocket", meta=(DisplayName="Send Binary Message Immediate"))
+	bool SendBinaryMessageImmediate(const TArray<uint8>& Data);
 
 	// Status
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
@@ -191,4 +198,5 @@ protected:
 	friend class FHorizonWebSocketWorker;
 	friend class FHorizonWebSocketSender;
 	friend class FHorizonWebSocketReceiver;
+	friend class UHorizonWebSocketComponent;
 };
