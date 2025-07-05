@@ -240,62 +240,24 @@ void UHorizonWebSocketClient::Disconnect()
 
 bool UHorizonWebSocketClient::SendMessage(const FString& Message)
 {
-	if (Message.IsEmpty())
+	if (!WebSocketWorker.IsValid() || !WebSocketWorker->Sender.IsValid())
 	{
+		LogMessage(TEXT("Cannot send message: worker or sender not available"), true);
 		return false;
 	}
 	
-	if (!bConnectionEstablished)
-	{
-		LogMessage(FString::Printf(TEXT("Cannot send message, not connected: %s"), *Message), true);
-		return false;
-	}
-
-	// Add to outgoing queue
-	OutgoingMessages.Enqueue(Message);
-	LogMessage(FString::Printf(TEXT("Queued message: %s"), *Message));
-	return true;
+	return WebSocketWorker->EnqueueMessage(Message);
 }
 
 bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data)
 {
-	if (Data.Num() == 0)
-	{
-		return false;
-	}
-	
-	if (!bConnectionEstablished)
-	{
-		LogMessage(FString::Printf(TEXT("Cannot send binary message, not connected: %d bytes"), Data.Num()), true);
-		return false;
-	}
-
-	// Add to outgoing binary queue
-	OutgoingBinaryMessages.Enqueue(Data);
-	LogMessage(FString::Printf(TEXT("Queued binary message: %d bytes"), Data.Num()));
-	return true;
-}
-
-bool UHorizonWebSocketClient::SendMessageImmediate(const FString& Message)
-{
 	if (!WebSocketWorker.IsValid() || !WebSocketWorker->Sender.IsValid())
 	{
-		LogMessage(TEXT("Cannot send immediate message: worker or sender not available"), true);
+		LogMessage(TEXT("Cannot send binary message: worker or sender not available"), true);
 		return false;
 	}
 	
-	return WebSocketWorker->Sender->SendMessageImmediate(Message);
-}
-
-bool UHorizonWebSocketClient::SendBinaryMessageImmediate(const TArray<uint8>& Data)
-{
-	if (!WebSocketWorker.IsValid() || !WebSocketWorker->Sender.IsValid())
-	{
-		LogMessage(TEXT("Cannot send immediate binary message: worker or sender not available"), true);
-		return false;
-	}
-	
-	return WebSocketWorker->Sender->SendBinaryMessageImmediate(Data);
+	return WebSocketWorker->EnqueueBinaryMessage(Data);
 }
 
 bool UHorizonWebSocketClient::IsConnected() const

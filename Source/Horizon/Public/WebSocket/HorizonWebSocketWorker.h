@@ -11,6 +11,10 @@ class FHorizonWebSocketSender;
 class FHorizonWebSocketReceiver;
 class UHorizonWebSocketComponent;
 
+/**
+ * HorizonWebSocketWorker
+ * Manages WebSocket communication on a separate thread
+ */
 class HORIZON_API FHorizonWebSocketWorker : public FRunnable
 {
 	friend class UHorizonWebSocketClient;
@@ -28,6 +32,10 @@ public:
 	// Connection management
 	void StartConnection(const FString& Host, int32 Port, const FString& Path, const FString& Protocol, bool bIsSecure);
 	void StopConnection();
+	
+	// Message enqueueing methods (non-blocking)
+	bool EnqueueMessage(const FString& Message);
+	bool EnqueueBinaryMessage(const TArray<uint8>& Data);
 
 protected:
 	UHorizonWebSocketClient* Client;
@@ -52,9 +60,8 @@ protected:
 	virtual void HandleIncomingMessages();
 	virtual void HandleOutgoingMessages();
 
-	// Immediate processing support
+	// Process incoming messages
 	void ProcessIncomingMessageImmediate(const TArray<uint8>& Data);
-	bool SendMessageDataImmediate(const TArray<uint8>& FrameData);
 
 private:
 	std::atomic<bool> bProcessingMessage{ false };

@@ -44,12 +44,7 @@ void FHorizonWebSocketSender::HandleOutgoingMessages()
     }
 }
 
-bool FHorizonWebSocketSender::SendMessageDataImmediate(const TArray<uint8>& FrameData)
-{
-    return SendData(FrameData);
-}
-
-bool FHorizonWebSocketSender::SendMessageImmediate(const FString& Message)
+bool FHorizonWebSocketSender::EnqueueMessage(const FString& Message)
 {
     if (Message.IsEmpty())
     {
@@ -58,22 +53,18 @@ bool FHorizonWebSocketSender::SendMessageImmediate(const FString& Message)
     
     if (!Client->IsConnected())
     {
-        Client->LogSocketMessage(FString::Printf(TEXT("Cannot send immediate message, not connected: %s"), *Message), true);
+        Client->LogSocketMessage(FString::Printf(TEXT("Cannot enqueue message, not connected: %s"), *Message), true);
         return false;
     }
 
-    TArray<uint8> Frame = FHorizonWebSocketProtocol::CreateWebSocketFrame(Message, false);
-    bool bSuccess = SendData(Frame);
+    // Add to the client's queue for processing by the worker thread
+    Client->OutgoingMessages.Enqueue(Message);
+    Client->LogSocketMessage(FString::Printf(TEXT("Queued message: %s"), *Message));
     
-    if (bSuccess)
-    {
-        Client->OnWebSocketMessageSent(Message);
-    }
-    
-    return bSuccess;
+    return true;
 }
 
-bool FHorizonWebSocketSender::SendBinaryMessageImmediate(const TArray<uint8>& Data)
+bool FHorizonWebSocketSender::EnqueueBinaryMessage(const TArray<uint8>& Data)
 {
     if (Data.Num() == 0)
     {
@@ -82,16 +73,13 @@ bool FHorizonWebSocketSender::SendBinaryMessageImmediate(const TArray<uint8>& Da
     
     if (!Client->IsConnected())
     {
-        Client->LogSocketMessage(FString::Printf(TEXT("Cannot send immediate binary message, not connected: %d bytes"), Data.Num()), true);
+        Client->LogSocketMessage(FString::Printf(TEXT("Cannot enqueue binary message, not connected: %d bytes"), Data.Num()), true);
         return false;
     }
 
-    bool bSuccess = SendData(Data);
+    // Add to the client's queue for processing by the worker thread
+    Client->OutgoingBinaryMessages.Enqueue(Data);
+    Client->LogSocketMessage(FString::Printf(TEXT("Queued binary message: %d bytes"), Data.Num()));
     
-    if (bSuccess)
-    {
-        Client->OnWebSocketMessageSent(FString::Printf(TEXT("Binary data (%d bytes)"), Data.Num()));
-    }
-    
-    return bSuccess;
+    return true;
 } 

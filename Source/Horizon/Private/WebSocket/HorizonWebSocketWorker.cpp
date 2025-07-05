@@ -44,9 +44,15 @@ uint32 FHorizonWebSocketWorker::Run()
 				// Main message loop
 				while (!bStopRequested && Client->IsConnected())
 				{
-					Receiver->HandleIncomingMessages();
+					// Process outgoing messages first for better responsiveness
 					Sender->HandleOutgoingMessages();
-					FPlatformProcess::Sleep(0.001f); // 1ms sleep for more responsive messaging
+					
+					// Then handle incoming messages
+					Receiver->HandleIncomingMessages();
+					
+					// Short sleep time (0.5ms) for more responsive message handling
+					// This ensures "immediate" messages are processed quickly
+					FPlatformProcess::Sleep(0.0005f); // 0.5ms sleep for more responsive messaging
 				}
 			}
 			else
@@ -87,7 +93,6 @@ void FHorizonWebSocketWorker::StartConnection(const FString& Host, int32 Port, c
 void FHorizonWebSocketWorker::StopConnection()
 {
 	bStopRequested = true;
-	bIsConnecting = false;
 }
 
 bool FHorizonWebSocketWorker::PerformHandshake()
@@ -143,7 +148,7 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 	FTCHARToUTF8 UTF8Request(*HandshakeRequest);
 	RequestData.Append(reinterpret_cast<const uint8*>(UTF8Request.Get()), UTF8Request.Length());
 
-	if (!Sender->SendData(RequestData))
+	if (!SendData(RequestData))
 	{
 		UE_LOG(LogHorizon, Error, TEXT("Failed to send handshake request"));
 		return false;
@@ -151,7 +156,7 @@ bool FHorizonWebSocketWorker::PerformHandshake()
 
 	// Read handshake response
 	TArray<uint8> ResponseData;
-	if (!Receiver->ReceiveData(ResponseData))
+	if (!ReceiveData(ResponseData))
 	{
 		UE_LOG(LogHorizon, Error, TEXT("Failed to receive handshake response"));
 		return false;
@@ -216,11 +221,20 @@ void FHorizonWebSocketWorker::ProcessIncomingMessageImmediate(const TArray<uint8
 	}
 }
 
-bool FHorizonWebSocketWorker::SendMessageDataImmediate(const TArray<uint8>& FrameData)
+bool FHorizonWebSocketWorker::EnqueueMessage(const FString& Message)
 {
 	if (Sender.IsValid())
 	{
-		return Sender->SendMessageDataImmediate(FrameData);
+		return Sender->EnqueueMessage(Message);
+	}
+	return false;
+}
+
+bool FHorizonWebSocketWorker::EnqueueBinaryMessage(const TArray<uint8>& Data)
+{
+	if (Sender.IsValid())
+	{
+		return Sender->EnqueueBinaryMessage(Data);
 	}
 	return false;
 }

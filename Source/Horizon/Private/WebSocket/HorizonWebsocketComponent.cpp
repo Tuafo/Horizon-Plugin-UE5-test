@@ -93,26 +93,6 @@ bool UHorizonWebSocketComponent::SendBinaryMessage(const TArray<uint8>& Data)
 	return WebSocket->SendBinaryMessage(Data);
 }
 
-bool UHorizonWebSocketComponent::SendMessageImmediate(const FString& Message)
-{
-	if (!WebSocket)
-	{
-		return false;
-	}
-
-	return WebSocket->SendMessageImmediate(Message);
-}
-
-bool UHorizonWebSocketComponent::SendBinaryMessageImmediate(const TArray<uint8>& Data)
-{
-	if (!WebSocket)
-	{
-		return false;
-	}
-
-	return WebSocket->SendBinaryMessageImmediate(Data);
-}
-
 bool UHorizonWebSocketComponent::IsConnected() const
 {
 	return WebSocket ? WebSocket->IsConnected() : false;

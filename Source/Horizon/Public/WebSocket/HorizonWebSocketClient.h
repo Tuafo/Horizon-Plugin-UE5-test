@@ -33,6 +33,10 @@ class FHorizonWebSocketSender;
 class FHorizonWebSocketReceiver;
 class UHorizonWebSocketComponent;
 
+/**
+ * HorizonWebSocketClient
+ * Main WebSocket client class that manages connection and message handling
+ */
 UCLASS(BlueprintType, Blueprintable)
 class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGameObject
 {
@@ -78,12 +82,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "WebSocket")
 	bool SendBinaryMessage(const TArray<uint8>& Data);
-	
-	UFUNCTION(BlueprintCallable, Category = "WebSocket", meta=(DisplayName="Send Message Immediate"))
-	bool SendMessageImmediate(const FString& Message);
-
-	UFUNCTION(BlueprintCallable, Category = "WebSocket", meta=(DisplayName="Send Binary Message Immediate"))
-	bool SendBinaryMessageImmediate(const TArray<uint8>& Data);
 
 	// Status
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "WebSocket")
@@ -132,9 +130,6 @@ public:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
 	bool bVerboseLogging = false;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
-	bool bImmediateProcessing = false;
 	
 	// Interface methods for sender and receiver
 	bool SendSocketData(const TArray<uint8>& Data);
