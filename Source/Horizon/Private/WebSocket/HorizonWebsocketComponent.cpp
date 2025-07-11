@@ -1,6 +1,7 @@
 #include "WebSocket/HorizonWebSocketComponent.h"
 #include "WebSocket/HorizonWebSocketClient.h"
 #include "Core/Horizon.h"
+#include "Threading/HorizonThreadPool.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 
@@ -83,19 +84,14 @@ bool UHorizonWebSocketComponent::SendMessage(const FString& Message)
 	return WebSocket->SendMessage(Message);
 }
 
-bool UHorizonWebSocketComponent::SendBinaryMessage(const TArray<uint8>& Data)
-{
-	if (!WebSocket)
-	{
-		return false;
-	}
-
-	return WebSocket->SendBinaryMessage(Data);
-}
-
 bool UHorizonWebSocketComponent::IsConnected() const
 {
 	return WebSocket ? WebSocket->IsConnected() : false;
+}
+
+UHorizonWebSocketClient* UHorizonWebSocketComponent::GetWebSocketClient() const
+{
+	return WebSocket;
 }
 
 EHorizonWebSocketState UHorizonWebSocketComponent::GetConnectionState() const
@@ -200,43 +196,58 @@ bool UHorizonWebSocketComponent::GetVerboseLogging() const
 	return WebSocket ? WebSocket->bVerboseLogging : false;
 }
 
-// Event handlers
-void UHorizonWebSocketComponent::HandleWebSocketConnected(bool bSuccess)
+void UHorizonWebSocketComponent::SetBatchSize(int32 Size)
 {
-	UE_LOG(LogHorizon, Log, TEXT("Component received Horizon WebSocket connected event: %s"), bSuccess ? TEXT("Success") : TEXT("Failed"));
-	OnConnected.Broadcast(bSuccess);
+	BatchSize = FMath::Clamp(Size, 100, 10000);
+	if (WebSocket)
+	{
+		WebSocket->BatchSize = BatchSize;
+	}
 }
 
-void UHorizonWebSocketComponent::HandleWebSocketConnectionError(const FString& ErrorMessage)
+void UHorizonWebSocketComponent::SetThreadPoolSize(int32 Size)
 {
-	UE_LOG(LogHorizon, Warning, TEXT("Component received Horizon WebSocket connection error: %s"), *ErrorMessage);
-	OnConnectionError.Broadcast(ErrorMessage);
+	ThreadPoolSize = FMath::Clamp(Size, 0, 32);
+	if (WebSocket)
+	{
+		WebSocket->ThreadPoolSize = ThreadPoolSize;
+	}
 }
 
-void UHorizonWebSocketComponent::HandleWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
+void UHorizonWebSocketComponent::SetMaxPendingMessages(int32 Count)
 {
-	UE_LOG(LogHorizon, Log, TEXT("Component received Horizon WebSocket closed event - Code: %d, Reason: %s, Clean: %s"), 
-		StatusCode, *Reason, bWasClean ? TEXT("Yes") : TEXT("No"));
-	OnClosed.Broadcast(StatusCode, Reason, bWasClean);
+	MaxPendingMessages = FMath::Clamp(Count, 1000, 1000000);
+	if (WebSocket)
+	{
+		WebSocket->MaxPendingMessages = MaxPendingMessages;
+	}
 }
 
-void UHorizonWebSocketComponent::HandleWebSocketMessage(const FString& Message)
+int32 UHorizonWebSocketComponent::GetBatchSize() const
 {
-	UE_LOG(LogHorizon, VeryVerbose, TEXT("Component received Horizon WebSocket message: %s"), *Message);
-	OnMessage.Broadcast(Message);
+	return WebSocket ? WebSocket->BatchSize : BatchSize;
 }
 
-void UHorizonWebSocketComponent::HandleWebSocketRawMessage(const TArray<uint8>& Data, int32 Size, int32 BytesRemaining)
+int32 UHorizonWebSocketComponent::GetThreadPoolSize() const
 {
-	UE_LOG(LogHorizon, VeryVerbose, TEXT("Component received Horizon WebSocket raw message: %d bytes"), Size);
-	OnRawMessage.Broadcast(Data, Size, BytesRemaining);
+	return WebSocket ? WebSocket->ThreadPoolSize : ThreadPoolSize;
 }
 
-void UHorizonWebSocketComponent::HandleWebSocketMessageSent(const FString& Message)
+int32 UHorizonWebSocketComponent::GetMaxPendingMessages() const
 {
-	UE_LOG(LogHorizon, VeryVerbose, TEXT("Component received Horizon WebSocket message sent event: %s"), *Message);
-	OnMessageSent.Broadcast(Message);
+	return WebSocket ? WebSocket->MaxPendingMessages : MaxPendingMessages;
 }
+
+FString UHorizonWebSocketComponent::GetPerformanceStats(bool bIncludeDetailedStats) const
+{
+	if (WebSocket)
+	{
+		return WebSocket->GetPerformanceStats(bIncludeDetailedStats);
+	}
+	return TEXT("Performance monitoring not enabled");
+}
+
+
 
 // Private methods
 void UHorizonWebSocketComponent::InitializeWebSocket()
@@ -244,9 +255,30 @@ void UHorizonWebSocketComponent::InitializeWebSocket()
 	if (!WebSocket)
 	{
 		WebSocket = NewObject<UHorizonWebSocketClient>(this);
+		
+		// Set the component reference so the client can call our events directly
+		WebSocket->SetOwningComponent(this);
+		
+		// Apply high-performance settings
+		ApplyPerformanceSettings();
+		
 		BindWebSocketEvents();
 		
 		UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket client initialized for component"));
+	}
+}
+
+void UHorizonWebSocketComponent::ApplyPerformanceSettings()
+{
+	if (WebSocket)
+	{
+		// Apply performance configuration (always optimized)
+		WebSocket->BatchSize = BatchSize;
+		WebSocket->ThreadPoolSize = ThreadPoolSize;
+		WebSocket->MaxPendingMessages = MaxPendingMessages;
+		
+		// Initialize the client with these settings
+		WebSocket->Initialize();
 	}
 }
 
@@ -254,12 +286,13 @@ void UHorizonWebSocketComponent::BindWebSocketEvents()
 {
 	if (WebSocket)
 	{
-		WebSocket->OnConnected.AddDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketConnected);
-		WebSocket->OnConnectionError.AddDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketConnectionError);
-		WebSocket->OnClosed.AddDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketClosed);
-		WebSocket->OnMessage.AddDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketMessage);
-		WebSocket->OnRawMessage.AddDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketRawMessage);
-		WebSocket->OnMessageSent.AddDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketMessageSent);
+		// Bind WebSocket client delegates to component delegates
+		WebSocket->OnConnected.AddDynamic(this, &UHorizonWebSocketComponent::HandleOnConnected);
+		WebSocket->OnConnectionError.AddDynamic(this, &UHorizonWebSocketComponent::HandleOnConnectionError);
+		WebSocket->OnClosed.AddDynamic(this, &UHorizonWebSocketComponent::HandleOnClosed);
+		WebSocket->OnMessage.AddDynamic(this, &UHorizonWebSocketComponent::HandleOnMessage);
+		WebSocket->OnRawMessage.AddDynamic(this, &UHorizonWebSocketComponent::HandleOnRawMessage);
+		WebSocket->OnMessageSent.AddDynamic(this, &UHorizonWebSocketComponent::HandleOnMessageSent);
 		
 		UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket events bound to component"));
 	}
@@ -269,12 +302,13 @@ void UHorizonWebSocketComponent::UnbindWebSocketEvents()
 {
 	if (WebSocket)
 	{
-		WebSocket->OnConnected.RemoveDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketConnected);
-		WebSocket->OnConnectionError.RemoveDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketConnectionError);
-		WebSocket->OnClosed.RemoveDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketClosed);
-		WebSocket->OnMessage.RemoveDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketMessage);
-		WebSocket->OnRawMessage.RemoveDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketRawMessage);
-		WebSocket->OnMessageSent.RemoveDynamic(this, &UHorizonWebSocketComponent::HandleWebSocketMessageSent);
+		// Unbind WebSocket client delegates from component delegates
+		WebSocket->OnConnected.RemoveAll(this);
+		WebSocket->OnConnectionError.RemoveAll(this);
+		WebSocket->OnClosed.RemoveAll(this);
+		WebSocket->OnMessage.RemoveAll(this);
+		WebSocket->OnRawMessage.RemoveAll(this);
+		WebSocket->OnMessageSent.RemoveAll(this);
 		
 		UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket events unbound from component"));
 	}
@@ -284,4 +318,41 @@ void UHorizonWebSocketComponent::PerformAutoConnect()
 {
 	UE_LOG(LogHorizon, Log, TEXT("Performing auto-connect to %s"), *AutoConnectURL);
 	Connect(AutoConnectURL, AutoConnectProtocol);
+}
+
+// Event handlers - forward WebSocket client events to component delegates and Blueprint events
+void UHorizonWebSocketComponent::HandleOnConnected(bool bSuccess)
+{
+	// Broadcast component delegate
+	OnConnected.Broadcast(bSuccess);
+}
+
+void UHorizonWebSocketComponent::HandleOnConnectionError(const FString& ErrorMessage)
+{
+	// Broadcast component delegate
+	OnConnectionError.Broadcast(ErrorMessage);
+}
+
+void UHorizonWebSocketComponent::HandleOnClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
+{
+	// Broadcast component delegate
+	OnClosed.Broadcast(StatusCode, Reason, bWasClean);
+}
+
+void UHorizonWebSocketComponent::HandleOnMessage(const FString& Message)
+{
+	// Broadcast component delegate
+	OnMessage.Broadcast(Message);
+}
+
+void UHorizonWebSocketComponent::HandleOnRawMessage(const TArray<uint8>& Data, int32 Size, int32 BytesRemaining)
+{
+	// Broadcast component delegate
+	OnRawMessage.Broadcast(Data, Size, BytesRemaining);
+}
+
+void UHorizonWebSocketComponent::HandleOnMessageSent(const FString& Message)
+{
+	// Broadcast component delegate
+	OnMessageSent.Broadcast(Message);
 }

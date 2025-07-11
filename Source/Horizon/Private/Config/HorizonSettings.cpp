@@ -47,12 +47,21 @@ void UHorizonSettings::ValidateSettings()
 	DefaultHeartbeatInterval = FMath::Clamp(DefaultHeartbeatInterval, 5.0f, 300.0f);
 	DefaultMaxReconnectAttempts = FMath::Clamp(DefaultMaxReconnectAttempts, 1, 10);
 	DefaultReconnectDelay = FMath::Clamp(DefaultReconnectDelay, 1.0f, 60.0f);
-	MaxConcurrentConnections = FMath::Clamp(MaxConcurrentConnections, 1, 100);
-	ClientCleanupInterval = FMath::Clamp(ClientCleanupInterval, 10.0f, 300.0f);
-	MessageQueueSize = FMath::Clamp(MessageQueueSize, 10, 10000);
+	MaxConcurrentConnections = FMath::Clamp(MaxConcurrentConnections, 1, 1000);
+	ClientCleanupInterval = FMath::Clamp(ClientCleanupInterval, 5.0f, 300.0f);
+	MaxPendingMessages = FMath::Clamp(MaxPendingMessages, 1000, 1000000);
 	ConnectionTimeout = FMath::Clamp(ConnectionTimeout, 5.0f, 120.0f);
 	MaxMessageSize = FMath::Clamp(MaxMessageSize, 1024, 16777216); // 1KB to 16MB
-	FrameBufferSize = FMath::Clamp(FrameBufferSize, 1024, 1048576); // 1KB to 1MB
+	FrameBufferSize = FMath::Clamp(FrameBufferSize, 8192, 2097152); // 8KB to 2MB
+	
+	// Validate high-performance settings
+	ThreadPoolSize = FMath::Clamp(ThreadPoolSize, 0, 32);
+	ThreadStackSize = FMath::Clamp(ThreadStackSize, 131072u, 2097152u);
+	MaxMessagePoolSize = FMath::Clamp(MaxMessagePoolSize, 500, 100000);
+	InitialMessagePoolSize = FMath::Clamp(InitialMessagePoolSize, 50, 5000);
+	DefaultBatchSize = FMath::Clamp(DefaultBatchSize, 100, 10000);
+	MaxBatchDelay = FMath::Clamp(MaxBatchDelay, 0.001f, 0.5f);
+	PerformanceMonitoringInterval = FMath::Clamp(PerformanceMonitoringInterval, 0.05f, 2.0f);
 
 	// Validate heartbeat message
 	if (DefaultHeartbeatMessage.IsEmpty())
@@ -127,6 +136,18 @@ bool UHorizonSettings::IsDebugModeEnabled()
 {
 	const UHorizonSettings* Settings = GetDefault<UHorizonSettings>();
 	return Settings ? Settings->bEnableDebugMode : false;
+}
+
+int32 UHorizonSettings::GetThreadPoolSize()
+{
+	const UHorizonSettings* Settings = GetDefault<UHorizonSettings>();
+	return Settings ? Settings->ThreadPoolSize : 0;
+}
+
+bool UHorizonSettings::IsMessagePoolingEnabled()
+{
+	const UHorizonSettings* Settings = GetDefault<UHorizonSettings>();
+	return Settings ? Settings->bEnableMessagePooling : true;
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -1,58 +1,147 @@
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-DECLARE_LOG_CATEGORY_EXTERN(LogHorizon, Log, All);
+/**
+ * @file Horizon.h
+ * @brief Core module definition for the Horizon WebSocket plugin
+ * 
+ * This file defines the main module interface for the Horizon plugin, which provides
+ * high-performance WebSocket communication capabilities for Unreal Engine 5 projects.
+ */
+
+/** 
+ * Main log category for the Horizon plugin
+ * Use UE_LOG(LogHorizon, LogLevel, TEXT("Message")) for logging throughout the plugin
+ */
+HORIZON_API DECLARE_LOG_CATEGORY_EXTERN(LogHorizon, Log, All);
 
 /**
- * The public interface to this module.  In most cases, this interface is only public to sibling modules 
- * within this plugin.
+ * @class FHorizonModule
+ * @brief Core module class for the Horizon WebSocket plugin
+ * 
+ * This module provides a complete WebSocket communication system optimized for single-client
+ * scenarios in Unreal Engine 5. It manages initialization and shutdown of all plugin subsystems
+ * including WebSocket connections, thread pools, and performance monitoring.
+ * 
+ * Key Features:
+ * - Single WebSocket client per game instance (optimized for single-player games)
+ * - Multithreaded message processing with configurable thread pools
+ * - High-performance batch and immediate message sending
+ * - Comprehensive performance monitoring and debugging tools
+ * - Full Blueprint and C++ integration
+ * 
+ * @see UHorizonSubsystem for game-level WebSocket management
+ * @see UHorizonBlueprintLibrary for Blueprint integration
  */
-class FHorizonModule : public IModuleInterface
+class HORIZON_API FHorizonModule : public IModuleInterface
 {
 public:
-	/** IModuleInterface implementation */
+	/**
+	 * Called when the module is loaded during engine startup
+	 * Initializes all plugin subsystems in the correct order
+	 */
 	virtual void StartupModule() override;
+
+	/**
+	 * Called when the module is unloaded during engine shutdown
+	 * Cleanly shuts down all plugin subsystems and releases resources
+	 */
 	virtual void ShutdownModule() override;
 
 	/**
-	 * Singleton-like access to this module's interface. This is just for convenience!
-	 * Beware of calling this during the shutdown phase, though. Your module might have been unloaded already.
-	 *
-	 * @return Returns singleton instance, loading the module on demand if needed
-	 */
-	static inline FHorizonModule& Get()
-	{
-		return FModuleManager::LoadModuleChecked<FHorizonModule>("Horizon");
-	}
-
-	/**
-	 * Checks to see if this module is loaded and ready.  It is only valid to call Get() if IsAvailable() returns true.
-	 *
-	 * @return True if the module is loaded and ready to use
-	 */
-	static inline bool IsAvailable()
-	{
-		return FModuleManager::Get().IsModuleLoaded("Horizon");
-	}
-
-	/**
-	 * Get the Horizon plugin version
-	 * @return Version string
+	 * Gets the current plugin version string
+	 * @return Version string in format "Major.Minor.Patch"
 	 */
 	static FString GetVersion() { return TEXT("1.0.0"); }
+	
+	/**
+	 * Checks if the Horizon module is currently loaded and available
+	 * @return True if module is loaded, false otherwise
+	 */
+	static bool IsAvailable() 
+	{ 
+		return FModuleManager::Get().IsModuleLoaded("Horizon"); 
+	}
+	
+	/**
+	 * Gets the singleton instance of the Horizon module
+	 * @return Reference to the module instance
+	 * @warning Only call this if IsAvailable() returns true
+	 */
+	static FHorizonModule& Get()
+	{
+		return FModuleManager::GetModuleChecked<FHorizonModule>("Horizon");
+	}
 
 	/**
-	 * Check if WebSocket functionality is available
-	 * @return True if WebSocket system is initialized and available
+	 * Checks if WebSocket functionality is available and initialized
+	 * @return True if WebSocket system is ready for use
 	 */
 	bool IsWebSocketAvailable() const { return bWebSocketInitialized; }
 
-private:
-	void InitializeWebSocket();
-	void ShutdownWebSocket();
+	/**
+	 * Checks if high-performance features are available and initialized
+	 * @return True if high-performance features are ready for use
+	 */
+	bool IsHighPerformanceAvailable() const { return bHighPerformanceInitialized; }
 
+	/**
+	 * Checks if the thread pool is available and initialized
+	 * @return True if thread pool is ready for use
+	 */
+	bool IsThreadPoolAvailable() const { return bThreadPoolInitialized; }
+
+	/**
+	 * Checks if performance monitoring is available and initialized
+	 * @return True if performance monitoring is ready for use
+	 */
+	bool IsPerformanceMonitoringAvailable() const { return bPerformanceMonitoringInitialized; }
+
+private:
+	/**
+	 * @name Subsystem Initialization Functions
+	 * These functions handle the startup and shutdown of individual plugin subsystems
+	 * @{
+	 */
+
+	/** Initialize WebSocket core functionality */
+	void InitializeWebSocket();
+	/** Shutdown WebSocket core functionality */
+	void ShutdownWebSocket();
+	
+	/** Initialize high-performance messaging features */
+	void InitializeHighPerformance();
+	/** Shutdown high-performance messaging features */
+	void ShutdownHighPerformance();
+	
+	/** Initialize thread pool for async operations */
+	void InitializeThreadPool();
+	/** Shutdown thread pool and wait for completion */
+	void ShutdownThreadPool();
+	
+	/** Initialize performance monitoring system */
+	void InitializePerformanceMonitoring();
+	/** Shutdown performance monitoring system */
+	void ShutdownPerformanceMonitoring();
+
+	/** @} */
+
+	/**
+	 * @name Module State Flags
+	 * These flags track the initialization state of each plugin subsystem
+	 * @{
+	 */
+
+	/** True if WebSocket core is initialized and ready */
 	bool bWebSocketInitialized = false;
+	/** True if high-performance features are initialized and ready */
+	bool bHighPerformanceInitialized = false;
+	/** True if thread pool is initialized and ready */
+	bool bThreadPoolInitialized = false;
+	/** True if performance monitoring is initialized and ready */
+	bool bPerformanceMonitoringInitialized = false;
+
+	/** @} */
 };
