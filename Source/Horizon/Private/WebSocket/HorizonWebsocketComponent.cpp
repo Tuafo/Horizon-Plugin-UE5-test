@@ -1,7 +1,6 @@
 #include "WebSocket/HorizonWebSocketComponent.h"
 #include "WebSocket/HorizonWebSocketClient.h"
 #include "Core/Horizon.h"
-#include "Threading/HorizonThreadPool.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 
@@ -196,49 +195,15 @@ bool UHorizonWebSocketComponent::GetVerboseLogging() const
 	return WebSocket ? WebSocket->bVerboseLogging : false;
 }
 
-void UHorizonWebSocketComponent::SetBatchSize(int32 Size)
-{
-	// Batching has been simplified - setting ignored
-	UE_LOG(LogHorizon, Log, TEXT("Batch size setting ignored - using simplified architecture"));
-}
-
-void UHorizonWebSocketComponent::SetThreadPoolSize(int32 Size)
-{
-	// Thread pool has been simplified - setting ignored
-	UE_LOG(LogHorizon, Log, TEXT("Thread pool size setting ignored - using simplified architecture"));
-}
-
-void UHorizonWebSocketComponent::SetMaxPendingMessages(int32 Count)
-{
-	// Message queuing has been simplified - setting ignored
-	UE_LOG(LogHorizon, Log, TEXT("Max pending messages setting ignored - using simplified architecture"));
-}
-
-int32 UHorizonWebSocketComponent::GetBatchSize() const
-{
-	// Batching simplified - return default value
-	return 1000;
-}
-
-int32 UHorizonWebSocketComponent::GetThreadPoolSize() const
-{
-	// Thread pool simplified - return default value
-	return 4;
-}
-
-int32 UHorizonWebSocketComponent::GetMaxPendingMessages() const
-{
-	// Message queuing simplified - return default value
-	return 10000;
-}
-
 FString UHorizonWebSocketComponent::GetPerformanceStats(bool bIncludeDetailedStats) const
 {
 	if (WebSocket)
 	{
-		return WebSocket->GetPerformanceStats(bIncludeDetailedStats);
+		return FString::Printf(TEXT("Connected: %s, State: %s"), 
+			WebSocket->IsConnected() ? TEXT("true") : TEXT("false"),
+			*UEnum::GetValueAsString(WebSocket->GetConnectionState()));
 	}
-	return TEXT("Performance monitoring not enabled");
+	return TEXT("No WebSocket client available");
 }
 
 
@@ -253,22 +218,12 @@ void UHorizonWebSocketComponent::InitializeWebSocket()
 		// Set the component reference so the client can call our events directly
 		WebSocket->SetOwningComponent(this);
 		
-		// Apply high-performance settings
-		ApplyPerformanceSettings();
+		// Initialize the client with default settings
+		WebSocket->Initialize();
 		
 		BindWebSocketEvents();
 		
 		UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket client initialized for component"));
-	}
-}
-
-void UHorizonWebSocketComponent::ApplyPerformanceSettings()
-{
-	if (WebSocket)
-	{
-		// Performance settings simplified - no configuration needed
-		// Initialize the client with default settings
-		WebSocket->Initialize();
 	}
 }
 

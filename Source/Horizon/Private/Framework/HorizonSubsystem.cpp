@@ -74,23 +74,13 @@ FString UHorizonSubsystem::GetHorizonStatus() const
 	return Status;
 }
 
-void UHorizonSubsystem::SetGlobalThreadPoolSize(int32 ThreadPoolSize)
-{
-	// Thread pool functionality has been simplified - no longer configurable
-	UE_LOG(LogHorizon, Log, TEXT("Thread pool size setting ignored - using simplified architecture"));
-}
-
-void UHorizonSubsystem::SetGlobalMaxPendingMessages(int32 MaxMessages)
-{
-	// Message batching has been simplified - no longer configurable
-	UE_LOG(LogHorizon, Log, TEXT("Max pending messages setting ignored - using simplified architecture"));
-}
-
 FString UHorizonSubsystem::GetGlobalPerformanceStats(bool bIncludeDetailedStats) const
 {
 	if (ManagedClient)
 	{
-		return ManagedClient->GetPerformanceStats(bIncludeDetailedStats);
+		return FString::Printf(TEXT("Connected: %s, State: %s"), 
+			ManagedClient->IsConnected() ? TEXT("true") : TEXT("false"),
+			*UEnum::GetValueAsString(ManagedClient->GetConnectionState()));
 	}
 	
 	return TEXT("No WebSocket client created");

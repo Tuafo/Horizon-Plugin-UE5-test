@@ -333,14 +333,6 @@ public:
 	 */
 	void LogSocketMessage(const FString& Message, bool bIsError = false) const;
 	
-	/**
-	 * Gets detailed performance statistics for this client
-	 * @param bIncludeDetailedStats Whether to include detailed metrics
-	 * @return String containing performance metrics
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Performance")
-	FString GetPerformanceStats(bool bIncludeDetailedStats = false) const;
-	
 	// Event delegates - Blueprint bindable
 	UPROPERTY(BlueprintAssignable, Category = "Horizon|WebSocket|Events")
 	FOnHorizonWebSocketConnected OnConnected;

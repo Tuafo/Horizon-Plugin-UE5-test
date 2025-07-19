@@ -839,14 +839,6 @@ void UHorizonWebSocketClient::LogSocketMessage(const FString& Message, bool bIsE
     LogMessage(Message, bIsError);
 }
 
-FString UHorizonWebSocketClient::GetPerformanceStats(bool bIncludeDetailedStats) const
-{
-    // Performance monitoring removed - return simple connection status
-    return FString::Printf(TEXT("Connected: %s, State: %s"), 
-        bConnectionEstablished ? TEXT("true") : TEXT("false"),
-        *UEnum::GetValueAsString(ConnectionState));
-}
-
 bool UHorizonWebSocketClient::PerformHandshake()
 {
     // Check shutdown flag

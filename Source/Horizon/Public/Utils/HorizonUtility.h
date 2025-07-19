@@ -117,23 +117,6 @@ public:
 	// High-Performance Utilities
 
 	/**
-	 * Calculate the optimal batch size based on message size and system capabilities
-	 * @param AverageMessageSize Average size of messages in bytes
-	 * @param MaxThroughputPerSecond Maximum desired throughput in messages per second
-	 * @return Recommended batch size
-	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Performance", meta = (DisplayName = "Calculate Optimal Batch Size (Horizon)"))
-	static int32 CalculateOptimalBatchSize(int32 AverageMessageSize, int32 MaxThroughputPerSecond);
-
-	/**
-	 * Calculate the optimal thread pool size based on system capabilities
-	 * @param ReserveMainThreadCores Number of cores to reserve for main thread (default 1)
-	 * @return Recommended thread pool size
-	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Performance", meta = (DisplayName = "Calculate Optimal Thread Pool Size (Horizon)"))
-	static int32 CalculateOptimalThreadPoolSize(int32 ReserveMainThreadCores = 1);
-
-	/**
 	 * Format bytes to human-readable string (KB, MB, etc.)
 	 * @param Bytes Number of bytes
 	 * @return Formatted string

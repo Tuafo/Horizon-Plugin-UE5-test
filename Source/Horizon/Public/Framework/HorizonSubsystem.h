@@ -177,12 +177,6 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Horizon|Subsystem|Status", meta = (DisplayName = "Get Horizon Status"))
 	FString GetHorizonStatus() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem|Performance")
-	void SetGlobalThreadPoolSize(int32 ThreadPoolSize = 0);
-
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem|Performance")
-	void SetGlobalMaxPendingMessages(int32 MaxMessages = 50000);
-
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Horizon|Subsystem|Performance")
 	FString GetGlobalPerformanceStats(bool bIncludeDetailedStats = false) const;
 

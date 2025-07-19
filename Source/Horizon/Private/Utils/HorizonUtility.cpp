@@ -180,48 +180,6 @@ FString UHorizonUtility::GenerateClientID()
 	return Guid.ToString(EGuidFormats::DigitsWithHyphens);
 }
 
-int32 UHorizonUtility::CalculateOptimalBatchSize(int32 AverageMessageSize, int32 MaxThroughputPerSecond)
-{
-	// Safety checks
-	AverageMessageSize = FMath::Max(1, AverageMessageSize);
-	MaxThroughputPerSecond = FMath::Max(1, MaxThroughputPerSecond);
-	
-	// Calculate batch size based on message size and throughput
-	// For small messages, use larger batches
-	// For large messages, use smaller batches
-	
-	const int32 MinBatchSize = 100;        // Increased from 10
-	const int32 MaxBatchSize = 10000;      // Kept the same
-	const int32 DefaultBatchSize = 500;    // New high-performance default
-	
-	// Base calculation: smaller messages = larger batches
-	int32 CalculatedBatchSize = 1000000 / (AverageMessageSize * 10);
-	
-	// Adjust for throughput: higher throughput = larger batches
-	CalculatedBatchSize = CalculatedBatchSize * (MaxThroughputPerSecond / 1000);
-	
-	// Ensure it's at least the default high-performance value
-	CalculatedBatchSize = FMath::Max(CalculatedBatchSize, DefaultBatchSize);
-	
-	// Clamp to reasonable range
-	return FMath::Clamp(CalculatedBatchSize, MinBatchSize, MaxBatchSize);
-}
-
-int32 UHorizonUtility::CalculateOptimalThreadPoolSize(int32 ReserveMainThreadCores)
-{
-	// Get the number of CPU cores
-	int32 NumCores = FPlatformMisc::NumberOfCores();
-	
-	// Reserve cores for the main thread and other processes
-	int32 ReservedCores = FMath::Max(1, ReserveMainThreadCores);
-	
-	// Calculate optimal thread pool size
-	int32 OptimalSize = FMath::Max(1, NumCores - ReservedCores);
-	
-	// Limit to a reasonable maximum
-	return FMath::Min(OptimalSize, 16);
-}
-
 FString UHorizonUtility::FormatBytes(int64 Bytes)
 {
 	const int64 KB = 1024;
