@@ -80,13 +80,13 @@ namespace Horizon
  * // Send immediate message
  * Client->SendMessage("Hello Server", true); // true = high priority
  * 
- * // Send batched message using message factory
- * auto ChatMessage = FHorizonMessageFactory::CreateChatMessage("Player1", "Hello World", "general");
+ * // Send batched message using utility
+ * FString ChatMessage = UHorizonUtility::CreateChatMessage("Player1", "Hello World", "general");
  * Client->SendMessage(ChatMessage);
  * @endcode
  * 
  * @see UHorizonWebSocketComponent for Blueprint integration
- * @see FHorizonMessageFactory for message creation
+ * @see UHorizonUtility for message creation
  */
 UCLASS(BlueprintType, Blueprintable, meta = (DisplayName = "Horizon WebSocket Client"))
 class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGameObject
@@ -608,33 +608,33 @@ protected:
  * This WebSocket client uses a single, clear way to send messages:
  * - Use SendMessage() for all message types (text/JSON)
  * - Plain text is automatically wrapped in JSON format for server compatibility
- * - For structured messages, use FHorizonMessageFactory helper functions:
- *   - FHorizonMessageFactory::CreateChatMessage() for chat messages
- *   - FHorizonMessageFactory::CreateGameActionMessage() for game actions
- *   - FHorizonMessageFactory::CreateSystemMessage() for system messages
- *   - FHorizonMessageFactory::CreatePlayerStatusMessage() for player status updates
- *   - FHorizonMessageFactory::CreateJSONMessage() for custom messages
+ * - For structured messages, use UHorizonUtility helper functions:
+ *   - UHorizonUtility::CreateChatMessage() for chat messages
+ *   - UHorizonUtility::CreateGameActionMessage() for game actions
+ *   - UHorizonUtility::CreateSystemMessage() for system messages
+ *   - UHorizonUtility::CreatePlayerStatusMessage() for player status updates
+ *   - UHorizonUtility::CreateJSONMessage() for custom messages
  * 
- * All FHorizonMessageFactory helper functions automatically add UUID and timestamp fields.
+ * All UHorizonUtility helper functions automatically add UUID and timestamp fields.
  * 
  * Example usage:
  *   // Simple text message (auto-wrapped with UUID and timestamp)
  *   Client->SendMessage("Hello World");
  *   
- *   // Chat message using FHorizonMessageFactory
- *   auto ChatMsg = FHorizonMessageFactory::CreateChatMessage("player123", "Hello!", "general");
+ *   // Chat message using UHorizonUtility
+ *   FString ChatMsg = UHorizonUtility::CreateChatMessage("player123", "Hello!", "general");
  *   Client->SendMessage(ChatMsg);
  *   
  *   // Game action message
  *   TMap<FString, FString> ActionData;
  *   ActionData.Add("x", "100.5");
  *   ActionData.Add("y", "200.0");
- *   auto ActionMsg = FHorizonMessageFactory::CreateGameActionMessage("player123", "move", ActionData);
+ *   FString ActionMsg = UHorizonUtility::CreateGameActionMessage("player123", "move", ActionData);
  *   Client->SendMessage(ActionMsg);
  *   
  *   // Custom structured message
  *   TMap<FString, FString> CustomData;
  *   CustomData.Add("custom_field", "value");
- *   auto CustomMsg = FHorizonMessageFactory::CreateJSONMessage("custom", "event", CustomData);
+ *   FString CustomMsg = UHorizonUtility::CreateJSONMessage("custom", "event", CustomData);
  *   Client->SendMessage(CustomMsg);
  */

@@ -1,5 +1,6 @@
 #include "Utils/HorizonUtility.h"
 #include "WebSocket/HorizonWebSocketClient.h"
+#include "Framework/HorizonSubsystem.h"
 #include "Core/Horizon.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -8,6 +9,9 @@
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/Paths.h"
+#include "Engine/World.h"
+#include "Engine/GameInstance.h"
+#include "WebSocket/HorizonPerformanceMonitor.h"
 
 bool UHorizonUtility::ParseWebSocketURL(const FString& URL, FString& OutProtocol, FString& OutHost, int32& OutPort, FString& OutPath)
 {
@@ -327,4 +331,86 @@ bool UHorizonUtility::SendMessageImmediately(UHorizonWebSocketClient* Client, co
 	}
 	
 	return Client->SendMessage(Message, true); // true = high priority (immediate)
+}
+
+// WebSocket Creation Functions
+
+UHorizonWebSocketClient* UHorizonUtility::CreateWebSocket(const UObject* WorldContext)
+{
+	UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext);
+	if (!Subsystem)
+	{
+		return nullptr;
+	}
+
+	UHorizonWebSocketClient* Client = Subsystem->CreateWebSocket();
+	if (Client)
+	{
+		UE_LOG(LogHorizon, Log, TEXT("Created WebSocket client"));
+	}
+
+	return Client;
+}
+
+FString UHorizonUtility::GetPerformanceStatistics(const UObject* WorldContext, bool bIncludeDetailedStats)
+{
+	auto PerformanceMonitor = Horizon::WebSocket::FHorizonPerformanceMonitor::Get();
+	if (PerformanceMonitor.IsValid())
+	{
+		return PerformanceMonitor->GetStatsAsString(bIncludeDetailedStats);
+	}
+
+	return TEXT("Performance monitor not available");
+}
+
+FString UHorizonUtility::GetHorizonVersion()
+{
+	return FHorizonModule::GetVersion();
+}
+
+bool UHorizonUtility::IsHorizonFeatureAvailable(const FString& FeatureName)
+{
+	if (FeatureName.Equals(TEXT("WebSocket"), ESearchCase::IgnoreCase))
+	{
+		return FHorizonModule::IsAvailable();
+	}
+	else if (FeatureName.Equals(TEXT("Threading"), ESearchCase::IgnoreCase))
+	{
+		return true;
+	}
+	else if (FeatureName.Equals(TEXT("PerformanceMonitoring"), ESearchCase::IgnoreCase))
+	{
+		return true;
+	}
+	else if (FeatureName.Equals(TEXT("BatchSending"), ESearchCase::IgnoreCase))
+	{
+		return true;
+	}
+	
+	return false;
+}
+
+// Helper Functions
+
+UHorizonSubsystem* UHorizonUtility::GetHorizonSubsystem(const UObject* WorldContext)
+{
+	if (!WorldContext)
+	{
+		return nullptr;
+	}
+
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::LogAndReturnNull);
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	UGameInstance* GameInstance = World->GetGameInstance();
+	if (!GameInstance)
+	{
+		return nullptr;
+	}
+
+	return GameInstance->GetSubsystem<UHorizonSubsystem>();
+}
 }

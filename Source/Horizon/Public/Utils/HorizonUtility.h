@@ -6,6 +6,7 @@
 
 // Forward declarations
 class UHorizonWebSocketClient;
+class UHorizonSubsystem;
 
 UCLASS()
 class HORIZON_API UHorizonUtility : public UBlueprintFunctionLibrary
@@ -13,6 +14,41 @@ class HORIZON_API UHorizonUtility : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 
 public:
+	// WebSocket Creation
+
+	/**
+	 * Create a WebSocket client
+	 * @param WorldContext World context for subsystem access
+	 * @return WebSocket client instance
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket", meta = (WorldContext = "WorldContext"))
+	static UHorizonWebSocketClient* CreateWebSocket(const UObject* WorldContext);
+
+	/**
+	 * Get performance statistics for the Horizon WebSocket system
+	 * @param WorldContext World context for subsystem access
+	 * @param bIncludeDetailedStats Whether to include detailed statistics
+	 * @return Performance statistics as a string
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket", meta = (WorldContext = "WorldContext"))
+	static FString GetPerformanceStatistics(const UObject* WorldContext, bool bIncludeDetailedStats = false);
+
+	/**
+	 * Get the Horizon plugin version
+	 * @return Version string
+	 */
+	UFUNCTION(BlueprintPure, Category = "Horizon|Information")
+	static FString GetHorizonVersion();
+
+	/**
+	 * Check if a specific Horizon feature is available
+	 * @param FeatureName The name of the feature to check
+	 * @return True if the feature is available
+	 */
+	UFUNCTION(BlueprintPure, Category = "Horizon|Information")
+	static bool IsHorizonFeatureAvailable(const FString& FeatureName);
+
+	// URL and Basic Utilities
 	/**
 	 * Parse a WebSocket URL to extract components
 	 */
@@ -175,6 +211,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Utilities", meta = (DisplayName = "Send Message Immediately (Horizon)"))
 	static bool SendMessageImmediately(UHorizonWebSocketClient* Client, const FString& Message);
 
+private:
+	// Helper functions
+	static class UHorizonSubsystem* GetHorizonSubsystem(const UObject* WorldContext);
+
+public:
 	// C++ convenience overloads with default parameters (not exposed to Blueprint)
 	
 	/**

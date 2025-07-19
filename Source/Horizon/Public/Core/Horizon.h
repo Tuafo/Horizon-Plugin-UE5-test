@@ -33,7 +33,7 @@ HORIZON_API DECLARE_LOG_CATEGORY_EXTERN(LogHorizon, Log, All);
  * - Full Blueprint and C++ integration
  * 
  * @see UHorizonSubsystem for game-level WebSocket management
- * @see UHorizonBlueprintLibrary for Blueprint integration
+ * @see UHorizonUtility for Blueprint integration
  */
 class HORIZON_API FHorizonModule : public IModuleInterface
 {
