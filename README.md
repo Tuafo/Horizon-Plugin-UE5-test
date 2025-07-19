@@ -1,22 +1,20 @@
 # Horizon WebSocket Plugin for Unreal Engine 5
 
-A high-performance, thread-safe WebSocket client implementation for Unreal Engine 5, designed for real-time communication with custom servers. Built from the ground up for single-player applications with enterprise-grade reliability and performance.
+A simple, lightweight WebSocket client implementation for Unreal Engine 5, designed for real-time communication with custom servers. Built with a clean, straightforward architecture inspired by SocketIOClient.
 
 ## 🚀 Key Features
 
-- ✅ **Performance Optimized**: Advanced message batching and thread-pool architecture
-- ✅ **Thread-Safe**: Complete thread safety with proper synchronization
-- ✅ **Auto-Reconnection**: Intelligent reconnection with exponential backoff
-- ✅ **Immediate Sending**: High-priority message bypassing for time-critical data
-- ✅ **Blueprint Compatible**: Full Blueprint node support with comprehensive API
-- ✅ **Message Pooling**: Memory-efficient object reuse for high-frequency messaging
-- ✅ **Comprehensive Logging**: Detailed debugging and performance monitoring
+- ✅ **Simple & Lightweight**: Clean architecture without complex batching or pooling
+- ✅ **Thread-Safe**: Essential thread safety for WebSocket operations
+- ✅ **Auto-Reconnection**: Configurable reconnection with simple retry logic
+- ✅ **Immediate Sending**: All messages send immediately for low latency
+- ✅ **Blueprint Compatible**: Full Blueprint node support with intuitive API
 - ✅ **WebSocket Compliant**: Full RFC 6455 implementation with WSS support
 - ✅ **Single-Client Architecture**: Optimized for single-player games and applications
 
 ## 🏗️ Architecture Overview
 
-The Horizon WebSocket Plugin follows a clean, scalable architecture designed for single-player applications:
+The Horizon WebSocket Plugin follows a clean, simple architecture inspired by SocketIOClient:
 
 ```mermaid
 graph TD
@@ -34,60 +32,31 @@ graph TD
     
     subgraph "Core WebSocket Layer"
         WC[Horizon WebSocket Client]
-        TM[Thread Manager]
-        MB[Message Batcher]
-        PM[Performance Monitor]
-        MF[Message Factory]
+        WP[WebSocket Protocol]
         
-        WC --> TM
-        WC --> MB
-        WC --> PM
-        WC --> MF
-    end
-    
-    subgraph "Message System"
-        MSG[Message Container]
-        MP[Message Pool]
-        MF --> MSG
-        MSG --> MP
+        WC --> WP
     end
     
     subgraph "Utility Layer"
         HU[Horizon Utility]
-        HBL[Horizon Blueprint Library]
-    end
-    
-    subgraph "Protocol Layer"
-        WSP[WebSocket Protocol]
-        MSG[Message System]
-        CONN[Connection Manager]
     end
     
     HC --> HS
     HS --> WC
-    WC --> WSP
-    WC --> MSG
-    WC --> CONN
-    
-    HC --> HBL
     WC --> HU
-    MF --> MSG
-    MSG --> MP
     
-    WSP -.-> SERVER[WebSocket Server]
+    WP -.-> SERVER[WebSocket Server]
 ```
 
 ## 📊 Message Flow Architecture
 
-Understanding how messages flow through the system is crucial for optimal performance:
+Simple message flow for immediate sending:
 
 ```mermaid
 sequenceDiagram
     participant BP as Blueprint/C++
     participant HC as WebSocket Component
     participant WC as WebSocket Client
-    participant MB as Message Batcher
-    participant TM as Thread Manager
     participant SERVER as WebSocket Server
     
     BP->>HC: Connect("ws://server:8080")
@@ -98,71 +67,53 @@ sequenceDiagram
     HC->>BP: OnConnected Delegate
     
     BP->>HC: SendMessage("Hello Server")
-    HC->>WC: QueueMessage(Message)
-    
-    alt Immediate Sending Mode
-        WC->>TM: Execute Immediate Send
-        TM->>SERVER: Send Message Directly
-    else Batched Sending Mode
-        WC->>MB: Add to Batch Queue
-        MB->>MB: Wait for Batch Size/Timer
-        MB->>TM: Execute Batch Send
-        TM->>SERVER: Send Batched Messages
-    end
+    HC->>WC: SendMessage(Message)
+    WC->>SERVER: Send Message Immediately
     
     SERVER->>WC: Message Sent Confirmation
     WC->>HC: OnMessageSent Event
     HC->>BP: OnMessageSent Delegate
     
     SERVER->>WC: Incoming Message
-    WC->>TM: Process on Background Thread
-    TM->>WC: Parsed Message
     WC->>HC: OnMessage Event
     HC->>BP: OnMessage Delegate
-    
-    WC->>PM: Update Metrics
-    PM->>PM: Calculate Throughput
-    PM->>BP: Performance Stats (if requested)
 ```
 
 ## 🔧 Message Utility System
 
-The plugin provides a comprehensive utility system for creating and sending messages:
+The plugin provides a simple utility system for creating and sending messages:
 
 ```mermaid
 graph TD
     subgraph "Message Creation Layer"
         UH[UHorizonUtility]
         subgraph "Utility Methods"
-            TEXT[CreateJSONMessage]
-            CHAT[CreateChatMessage]
-            GAME[CreateGameActionMessage]
-            SYS[CreateSystemMessage]
-            STATUS[CreatePlayerStatusMessage]
-            IMMEDIATE[SendMessageImmediately]
+            JSON[MakeJSONMessage]
+            CHAT[MakeChatMessage]
+            GAME[MakeGameActionMessage]
+            SYS[MakeSystemMessage]
+            STATUS[MakePlayerStatusMessage]
         end
         
-        UH --> TEXT
+        UH --> JSON
         UH --> CHAT
         UH --> GAME
         UH --> SYS
         UH --> STATUS
-        UH --> IMMEDIATE
     end
     
     subgraph "WebSocket Layer"
         WC[WebSocket Client]
-        SEND[Send Methods]
+        SEND[SendMessage]
         
         WC --> SEND
     end
     
-    TEXT --> WC
+    JSON --> WC
     CHAT --> WC
     GAME --> WC
     SYS --> WC
     STATUS --> WC
-    IMMEDIATE --> WC
 ```
 
 ### Key Benefits:
@@ -171,61 +122,20 @@ graph TD
 2. **Blueprint Integration**: Full Blueprint node support for all functions
 3. **Type Safety**: Proper message validation and formatting
 4. **Consistent Structure**: All messages follow the same JSON patterns
-5. **Immediate Sending**: High-priority message bypassing for critical data
+5. **Immediate Sending**: All messages send immediately for low latency
 
 ### Usage Examples:
 
 ```cpp
 // Create messages using the utility
-FString ChatMessage = UHorizonUtility::CreateChatMessage("player123", "Hello world!", "general");
-FString GameMessage = UHorizonUtility::CreateGameActionMessage("player123", "jump", {{"x", "100"}, {"y", "200"}});
-FString SystemMessage = UHorizonUtility::CreateSystemMessage("maintenance", {{"duration", "5 minutes"}});
+FString ChatMessage = UHorizonUtility::MakeChatMessage("player123", "Hello world!", "general");
+FString GameMessage = UHorizonUtility::MakeGameActionMessage("player123", "jump", {{"x", "100"}, {"y", "200"}});
+FString SystemMessage = UHorizonUtility::MakeSystemMessage("maintenance", {{"duration", "5 minutes"}});
 
-// Send messages
+// Send messages (all send immediately)
 WebSocket->SendMessage(ChatMessage);
-UHorizonUtility::SendMessageImmediately(WebSocket, GameMessage);
-```
-
-## �🔄 Batching vs Immediate Sending
-
-The plugin supports two distinct sending modes, each optimized for different use cases:
-
-```mermaid
-graph TD
-    subgraph "Message Types"
-        CRITICAL[Critical Messages]
-        BULK[Bulk Messages]
-    end
-    
-    subgraph "Immediate Sending Path"
-        IS[Immediate Send]
-        BT[Bypass Batching]
-        DS[Direct Socket Send]
-        
-        CRITICAL --> IS
-        IS --> BT
-        BT --> DS
-    end
-    
-    subgraph "Batched Sending Path"
-        BS[Batch Queue]
-        BW[Batch Wait]
-        BC[Batch Combine]
-        BSS[Batch Socket Send]
-        
-        BULK --> BS
-        BS --> BW
-        BW --> BC
-        BC --> BSS
-    end
-    
-    subgraph "Performance Impact"
-        LOW[Low Latency - Higher CPU]
-        HIGH[High Throughput - Lower CPU]
-        
-        DS --> LOW
-        BSS --> HIGH
-    end
+WebSocket->SendMessage(GameMessage);
+WebSocket->SendMessage(SystemMessage);
 ```
 
 ## 🎯 Blueprint Integration
@@ -269,113 +179,29 @@ graph LR
     end
 ```
 
-## 🧵 Threading and Performance
-
-The plugin uses a sophisticated threading model for optimal performance:
-
-```mermaid
-graph TD
-    subgraph "Main Game Thread"
-        GT[Game Thread]
-        UI[UI Updates]
-        
-        GT --> UI
-    end
-    
-    subgraph "WebSocket Thread Pool"
-        subgraph "Worker Threads"
-            WT1[Worker Thread 1]
-            WT2[Worker Thread 2]
-            WT3[Worker Thread 3]
-            WTN[Worker Thread N]
-        end
-        
-        TM[Thread Manager]
-        TM --> WT1
-        TM --> WT2
-        TM --> WT3
-        TM --> WTN
-    end
-    
-    subgraph "Performance Monitoring"
-        PM[Performance Monitor]
-        STATS[Statistics Collection]
-        
-        PM --> STATS
-    end
-    
-    subgraph "Memory Management"
-        MP[Message Pool]
-        GC[Garbage Collection]
-        
-        MP --> GC
-    end
-    
-    GT -.-> TM
-    TM -.-> GT
-    
-    WT1 --> PM
-    WT2 --> PM
-    WT3 --> PM
-    WTN --> PM
-    
-    WT1 --> MP
-    WT2 --> MP
-    WT3 --> MP
-    WTN --> MP
-```
-
 ## 🔧 Configuration and Settings
 
-The plugin provides comprehensive configuration options through the Project Settings:
+The plugin provides simple configuration options through the WebSocket client properties:
 
 ```mermaid
 graph TD
-    subgraph "Project Settings - Plugins - Horizon"
-        subgraph "WebSocket Settings"
-            WS_AUTO[Auto-connect on Start]
-            WS_URL[Default Server URL]
-            WS_PROTO[WebSocket Protocol]
-            WS_TIMEOUT[Connection Timeout]
-            WS_HEARTBEAT[Heartbeat Interval]
-            WS_RECONNECT[Auto-reconnect Settings]
+    subgraph "WebSocket Client Properties"
+        subgraph "Connection Settings"
+            WS_AUTO[Auto Reconnect]
+            WS_ATTEMPTS[Max Reconnect Attempts]
+            WS_DELAY[Reconnect Delay]
         end
         
-        subgraph "Performance Settings"
-            PERF_THREADS[Thread Pool Size]
-            PERF_BATCH[Batch Size]
-            PERF_DELAY[Batch Delay]
-            PERF_POOL[Message Pool Size]
-            PERF_BUFFER[Buffer Sizes]
+        subgraph "Heartbeat Settings"
+            HB_ENABLE[Enable Heartbeat]
+            HB_INTERVAL[Heartbeat Interval]
+            HB_MESSAGE[Heartbeat Message]
         end
         
         subgraph "Logging Settings"
-            LOG_LEVEL[Log Level]
             LOG_VERBOSE[Verbose Logging]
-            LOG_CONN[Connection Events]
-            LOG_MSG[Message Events]
-            LOG_PERF[Performance Metrics]
-        end
-        
-        subgraph "Security Settings"
-            SEC_SSL[SSL Certificate Verification]
-            SEC_INSECURE[Allow Insecure Connections]
-            SEC_MAXSIZE[Maximum Message Size]
-            SEC_TIMEOUT[Security Timeouts]
-        end
-        
-        subgraph "Development Settings"
-            DEV_DEBUG[Debug Mode]
-            DEV_SERVERS[Debug Server URLs]
-            DEV_AUTOCONNECT[Auto-connect in PIE]
-            DEV_SIMULATE[Simulate Failures]
         end
     end
-    
-    WS_AUTO --> PERF_THREADS
-    PERF_THREADS --> LOG_LEVEL
-    LOG_LEVEL --> SEC_SSL
-    SEC_SSL --> DEV_DEBUG
 ```
 
 ## 🎮 Usage Examples
@@ -409,7 +235,7 @@ graph TD
 
 1. **Include the necessary headers:**
    ```cpp
-   #include "Utils/HorizonBlueprintLibrary.h"
+   #include "Utils/HorizonUtility.h"
    #include "WebSocket/HorizonWebSocketClient.h"
    #include "WebSocket/HorizonMessage.h"
    ```
@@ -417,7 +243,7 @@ graph TD
 2. **Create and configure a WebSocket client:**
    ```cpp
    // Create WebSocket client
-   UHorizonWebSocketClient* WebSocket = UHorizonBlueprintLibrary::CreateWebSocket();
+   UHorizonWebSocketClient* WebSocket = UHorizonUtility::CreateWebSocket(this);
    
    // Bind to events
    WebSocket->OnConnected.AddDynamic(this, &AMyActor::OnWebSocketConnected);
@@ -438,7 +264,7 @@ graph TD
            UE_LOG(LogTemp, Log, TEXT("Connected to WebSocket server"));
            
            // Create and send a message using the utility
-           FString WelcomeMessage = UHorizonUtility::CreateChatMessage(
+           FString WelcomeMessage = UHorizonUtility::MakeChatMessage(
                TEXT("player123"), 
                TEXT("Hello from Unreal!"), 
                TEXT("general")
@@ -497,13 +323,13 @@ graph TD
 3. **Advanced message handling with utility:**
    ```cpp
    // Create different message types
-   FString ChatMessage = UHorizonUtility::CreateChatMessage(
+   FString ChatMessage = UHorizonUtility::MakeChatMessage(
        TEXT("player123"), 
        TEXT("Hello everyone!"), 
        TEXT("general")
    );
    
-   FString GameActionMessage = UHorizonUtility::CreateGameActionMessage(
+   FString GameActionMessage = UHorizonUtility::MakeGameActionMessage(
        TEXT("player123"), 
        TEXT("jump"), 
        {
@@ -513,7 +339,7 @@ graph TD
        }
    );
    
-   FString SystemMessage = UHorizonUtility::CreateSystemMessage(
+   FString SystemMessage = UHorizonUtility::MakeSystemMessage(
        TEXT("maintenance"), 
        {
            {TEXT("duration"), TEXT("5 minutes")},
@@ -521,77 +347,29 @@ graph TD
        }
    );
    
-   // Send messages with different priorities
-   WebSocket->SendMessage(ChatMessage);           // Normal priority (batched)
-   UHorizonUtility::SendMessageImmediately(WebSocket, GameActionMessage);  // High priority (immediate)
-   WebSocket->SendMessage(SystemMessage);         // Normal priority (batched)
+   // Send messages (all send immediately)
+   WebSocket->SendMessage(ChatMessage);
+   WebSocket->SendMessage(GameActionMessage);
+   WebSocket->SendMessage(SystemMessage);
    
    // Send binary data
    TArray<uint8> BinaryData = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-   WebSocket->SendBinaryMessageNow(BinaryData);
+   WebSocket->SendBinaryMessage(BinaryData);
    ```
 
 ## 📝 Configuration Reference
 
-### WebSocket Settings
+### WebSocket Client Properties
 
-| Setting | Default | Description |
+| Property | Default | Description |
 |---------|---------|-------------|
-| `Default Heartbeat Enabled` | `true` | Enable automatic heartbeat messages |
-| `Default Heartbeat Interval` | `30.0s` | Time between heartbeat messages |
-| `Default Max Reconnect Attempts` | `3` | Maximum reconnection attempts |
-| `Default Reconnect Delay` | `5.0s` | Delay between reconnection attempts |
-| `Default Auto Reconnect` | `true` | Enable automatic reconnection |
-| `Default Heartbeat Message` | `"ping"` | Content of heartbeat messages |
-
-### Performance Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `Thread Pool Size` | `0` (auto) | Number of worker threads |
-| `Thread Stack Size` | `256KB` | Stack size for worker threads |
-| `Thread Priority` | `Above Normal` | Priority for worker threads |
-| `Enable Message Pooling` | `true` | Enable object pooling for messages |
-| `Max Pool Size` | `5000` | Maximum pooled message objects |
-| `Initial Pool Size` | `500` | Initial pooled message objects |
-| `Default Batch Size` | `500` | Messages per batch |
-| `Max Batch Delay` | `0.05s` | Maximum batching delay |
-
-### Logging Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `Enable Verbose Logging` | `false` | Enable detailed debug logging |
-| `Log Connection Events` | `true` | Log connection/disconnection events |
-| `Log Message Events` | `false` | Log message send/receive events |
-| `Log Heartbeat Events` | `false` | Log heartbeat message events |
-
-### Security Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `Allow Insecure Connections` | `true` | Allow `ws://` connections |
-| `Verify SSL Certificates` | `true` | Verify SSL certificates for `wss://` |
-| `Connection Timeout` | `30.0s` | Connection establishment timeout |
-| `Max Message Size` | `1MB` | Maximum incoming message size |
-
-## 🔍 Performance Monitoring
-
-The plugin includes comprehensive performance monitoring:
-
-```cpp
-// Get detailed performance metrics
-FString PerfStats = WebSocket->GetPerformanceStats(true);
-
-// Performance metrics include:
-// - Messages sent/received per second
-// - Bytes sent/received per second
-// - Average and peak latency
-// - Thread pool utilization
-// - Memory pool efficiency
-// - Connection uptime
-// - Error rates
-```
+| `bAutoReconnect` | `true` | Enable automatic reconnection |
+| `MaxReconnectAttempts` | `5` | Maximum reconnection attempts |
+| `ReconnectDelaySeconds` | `2.0s` | Delay between reconnection attempts |
+| `bEnableHeartbeat` | `true` | Enable automatic heartbeat messages |
+| `HeartbeatIntervalSeconds` | `30.0s` | Time between heartbeat messages |
+| `HeartbeatMessage` | `"ping"` | Content of heartbeat messages |
+| `bVerboseLogging` | `false` | Enable detailed debug logging |
 
 ## 🛠️ Troubleshooting
 
@@ -607,15 +385,10 @@ FString PerfStats = WebSocket->GetPerformanceStats(true);
    - Check if the connection is still active
    - Verify server is sending valid WebSocket frames
 
-3. **Performance issues:**
-   - Increase thread pool size for high-throughput scenarios
-   - Adjust batch size based on your message patterns
-   - Enable message pooling for frequent messaging
-
-4. **Memory issues:**
-   - Check message pool configuration
-   - Monitor for memory leaks in message handling
-   - Ensure proper cleanup of WebSocket clients
+3. **Simple connection issues:**
+   - Check connection state using `GetConnectionState()`
+   - Enable verbose logging with `bVerboseLogging = true`
+   - Verify heartbeat settings if connection drops frequently
 
 ### Debug Settings
 
@@ -639,20 +412,17 @@ Enable debug mode in Project Settings > Plugins > Horizon:
    UHorizonSubsystem* Subsystem = GetGameInstance()->GetSubsystem<UHorizonSubsystem>();
    ```
 
-3. **Choose the right sending mode:**
+3. **All messages send immediately:**
    ```cpp
-   // For time-critical data (position updates, input)
-   WebSocket->SendMessageNow(TEXT("Critical data"));
-   
-   // For bulk data (chat, game events)
-   WebSocket->SendMessage(TEXT("Regular data"));
+   // All messages send immediately - no need for special methods
+   WebSocket->SendMessage(TEXT("Any message"));
    ```
 
-4. **Monitor performance:**
+4. **Use utility functions for structured messages:**
    ```cpp
-   // Regularly check performance metrics
-   FString Stats = WebSocket->GetPerformanceStats();
-   UE_LOG(LogTemp, Log, TEXT("WebSocket Performance: %s"), *Stats);
+   // Create messages using utility functions
+   FString ChatMsg = UHorizonUtility::MakeChatMessage("player1", "Hello", "general");
+   WebSocket->SendMessage(ChatMsg);
    ```
 
 5. **Handle errors gracefully:**
