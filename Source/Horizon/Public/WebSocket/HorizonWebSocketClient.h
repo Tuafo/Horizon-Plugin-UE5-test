@@ -32,11 +32,6 @@ class FSocket;
 
 namespace Horizon
 {
-	namespace Threading
-	{
-		class FThreadPool;
-	}
-	
 	namespace WebSocket
 	{
 		class FHorizonMessage;
@@ -362,20 +357,6 @@ public:
 	int32 BatchSize = 500;
 	
 	/**
-	 * Number of worker threads in the thread pool
-	 * 
-	 * 0 = Auto-configure based on CPU cores (recommended)
-	 * 1+ = Manual thread count
-	 * 
-	 * More threads can improve performance when:
-	 * - Sending high volumes of messages
-	 * - Using complex message serialization
-	 * - Running on multi-core systems
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Performance", meta = (ClampMin = "0", ClampMax = "10"))
-	int32 ThreadPoolSize = 0;
-	
-	/**
 	 * Maximum number of messages that can be queued for sending
 	 * 
 	 * Acts as a backpressure mechanism to prevent memory exhaustion
@@ -545,9 +526,6 @@ protected:
 	Horizon::Protocol::FWebSocketProtocol::FExtensionFlags ExtensionFlags;
 	TArray<FString> AcceptedExtensions;
 
-	// Thread pool for async operations
-	TSharedPtr<Horizon::Threading::FThreadPool> ThreadPool;
-	
 	// High-performance message queues
 	std::atomic<int32> PendingMessagesCount{0};
 	TQueue<TSharedPtr<Horizon::WebSocket::FHorizonMessage>> OutgoingHighPriorityMessages;

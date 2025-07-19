@@ -46,7 +46,6 @@ UHorizonWebSocketClient::UHorizonWebSocketClient()
     // Set optimized defaults for message limits
     MaxPendingMessages = 50000;           // Optimized default
 }
-}
 
 UHorizonWebSocketClient::~UHorizonWebSocketClient()
 {
@@ -410,10 +409,10 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
     }
     
     // Send immediately using Async task (simplified approach)
-    AsyncTask(ENamedThreads::AnyBackgroundThread, [this, MessageToSend]()
+    AsyncTask(ENamedThreads::AnyThread, [this, MessageToSend]()
     {
         // Create WebSocket text frame and send
-        TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateTextFrame(MessageToSend, true);
+        TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateWebSocketFrame(MessageToSend, true);
         SendSocketData(FrameData);
     });
     
@@ -435,15 +434,12 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
     }
     
     // Send immediately using Async task (simplified approach)
-    AsyncTask(ENamedThreads::AnyBackgroundThread, [this, Data]()
+    AsyncTask(ENamedThreads::AnyThread, [this, Data]()
     {
         // Create WebSocket binary frame and send
         TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateBinaryFrame(Data, true);
         SendSocketData(FrameData);
     });
-    
-    return true;
-}
     
     return true;
 }
@@ -526,21 +522,6 @@ void UHorizonWebSocketClient::CleanupWebSocket()
     
     bCleaningUp = true;
     bConnectionEstablished = false;
-
-    // Release thread pool reference (but don't shutdown the singleton)
-    if (ThreadPool.IsValid())
-    {
-        try
-        {
-            // Just release our reference, don't shutdown the singleton
-            // The singleton will manage its own lifecycle
-            ThreadPool.Reset();
-        }
-        catch (...)
-        {
-            UE_LOG(LogHorizon, Warning, TEXT("Exception during thread pool cleanup"));
-        }
-    }
 
     // Clean up socket
     {
@@ -1031,10 +1012,10 @@ void UHorizonWebSocketClient::LogSocketMessage(const FString& Message, bool bIsE
 
 FString UHorizonWebSocketClient::GetPerformanceStats(bool bIncludeDetailedStats) const
 {
-    if (ThreadPool.IsValid())
-    {
-    }
-    
+    // Performance monitoring removed - return simple connection status
+    return FString::Printf(TEXT("Connected: %s, State: %s"), 
+        bConnectionEstablished ? TEXT("true") : TEXT("false"),
+        *UEnum::GetValueAsString(ConnectionState));
 }
 
 void UHorizonWebSocketClient::ProcessOutgoingBatch(bool bForceFlush)
@@ -1059,8 +1040,8 @@ void UHorizonWebSocketClient::ProcessOutgoingBatch(bool bForceFlush)
     TArray<TSharedPtr<Horizon::WebSocket::FHorizonMessage>> BatchToProcess = MoveTemp(BatchedMessages);
     BatchedMessages.Empty();
     
-    // Submit to thread pool for processing
-    ThreadPool->EnqueueTask([this, BatchToProcess]() {
+    // Submit to async task for processing (simplified approach)
+    AsyncTask(ENamedThreads::AnyThread, [this, BatchToProcess]() {
         // Process each message in the batch
         for (const TSharedPtr<Horizon::WebSocket::FHorizonMessage>& Message : BatchToProcess)
         {
@@ -1073,8 +1054,6 @@ void UHorizonWebSocketClient::ProcessOutgoingBatch(bool bForceFlush)
             // Decrement pending message counter
             PendingMessagesCount--;
         }
-        
-        return true;
     });
 }
 
@@ -1252,17 +1231,19 @@ bool UHorizonWebSocketClient::ProcessHandshakeResponse(const FString& Response)
 
 bool UHorizonWebSocketClient::CreateWorkerTask(TFunction<void()> TaskFunction)
 {
-    if (!ThreadPool.IsValid())
+    // Check if we're shutting down
+    if (bShouldShutdown)
     {
-        LogMessage(TEXT("Cannot create worker task: thread pool not initialized"), true);
+        LogMessage(TEXT("Cannot create worker task: client is shutting down"), true);
         return false;
     }
     
-    return ThreadPool->EnqueueTask([this, TaskFunction = MoveTemp(TaskFunction)]() {
+    // Execute task using AsyncTask (simplified approach)
+    AsyncTask(ENamedThreads::AnyThread, [this, TaskFunction = MoveTemp(TaskFunction)]() {
         // Check shutdown flag and object validity early and often
         if (bShouldShutdown || !IsValid(this))
         {
-            return true; // Return true to indicate task completion, even if aborted
+            return; // Exit early if shutting down
         }
         
         try
@@ -1283,9 +1264,9 @@ bool UHorizonWebSocketClient::CreateWorkerTask(TFunction<void()> TaskFunction)
                 UE_LOG(LogHorizon, Error, TEXT("Unknown exception in worker task"));
             }
         }
-        
-        return true;
     });
+    
+    return true;
 }
 
 void UHorizonWebSocketClient::ProcessReceivedFrame(bool bFinal, uint8 Opcode, const TArray<uint8>& Payload)
