@@ -40,31 +40,18 @@ namespace Horizon
 
 /**
  * @class UHorizonWebSocketClient
- * @brief High-performance WebSocket client for UE5 applications
+ * @brief Simple WebSocket client for UE5 applications
  * 
- * The HorizonWebSocketClient provides a robust, thread-safe WebSocket implementation
- * designed for real-time communication with custom servers. It handles connection
- * management, message batching, automatic reconnection, and performance optimization.
+ * The HorizonWebSocketClient provides a WebSocket implementation for real-time 
+ * communication with custom servers. It features a simplified architecture
+ * similar to SocketIOClient for ease of use.
  * 
  * Key Features:
- * - Thread-safe asynchronous message processing
- * - Configurable message batching for optimal throughput
- * - Automatic reconnection with exponential backoff
- * - Built-in heartbeat mechanism for connection health
- * - Performance monitoring and statistics
+ * - Simple connection management
+ * - Automatic reconnection (configurable)
+ * - Heartbeat mechanism for connection health
  * - Blueprint and C++ API support
- * 
- * Architecture:
- * The client operates on multiple threads:
- * - Main Thread: Handles UI updates and Blueprint callbacks
- * - Worker Threads: Process message serialization and network I/O
- * - Timer Thread: Manages heartbeat and reconnection logic
- * 
- * Message Flow:
- * 1. Messages are queued in thread-safe containers
- * 2. Batching system collects messages for efficient transmission
- * 3. Worker threads handle JSON serialization and network sending
- * 4. Incoming messages are processed asynchronously and dispatched to main thread
+ * - Direct message sending (no complex batching)
  * 
  * Usage Example:
  * @code
@@ -72,10 +59,10 @@ namespace Horizon
  * UHorizonWebSocketClient* Client = Subsystem->CreateWebSocket();
  * Client->Connect("ws://localhost:8080", "my-protocol");
  * 
- * // Send immediate message
- * Client->SendMessage("Hello Server", true); // true = high priority
+ * // Send message
+ * Client->SendMessage("Hello Server");
  * 
- * // Send batched message using utility
+ * // Send message using utility
  * FString ChatMessage = UHorizonUtility::CreateChatMessage("Player1", "Hello World", "general");
  * Client->SendMessage(ChatMessage);
  * @endcode
@@ -202,44 +189,27 @@ public:
 	/**
 	 * Sends a message through the WebSocket connection
 	 * 
-	 * This is the primary method for sending data to the server. Messages can be
-	 * sent in two modes:
-	 * - Batched: Messages are collected and sent in groups for efficiency
-	 * - High Priority: Messages bypass batching and are sent immediately
-	 * 
-	 * Message Format:
-	 * - Plain text messages are automatically wrapped in JSON format
-	 * - Use UHorizonUtility helper functions for structured messages
-	 * - All messages automatically include UUID and timestamp fields
+	 * Messages are sent immediately using simple async tasks.
+	 * Plain text messages are automatically wrapped in JSON format.
 	 * 
 	 * @param Message The message content (plain text or JSON string)
-	 * @param bHighPriority If true, bypasses batching and sends immediately
-	 * @return true if the message was successfully queued for transmission
+	 * @param bHighPriority Unused parameter (kept for API compatibility)
+	 * @return true if the message was successfully sent
 	 * 
 	 * @see UHorizonUtility::CreateChatMessage() for chat messages
 	 * @see UHorizonUtility::CreateGameActionMessage() for game events
-	 * @see SendMessageNow() for immediate sending
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages")
 	bool SendMessage(const FString& Message, bool bHighPriority = false);
 
 	/**
-	 * Sends a message immediately, bypassing batching
+	 * Sends a message immediately (same as SendMessage)
 	 * 
-	 * This method sends messages with the highest priority, bypassing the batching
-	 * system for time-critical communications. Use this for:
-	 * - Real-time position updates
-	 * - Input events
-	 * - Critical game state changes
-	 * - Emergency notifications
-	 * 
-	 * The message is sent directly to the network layer without waiting for
-	 * batch timers or size limits.
+	 * This method is kept for API compatibility. All messages
+	 * are now sent immediately by default.
 	 * 
 	 * @param Message The message content (plain text or JSON string)
-	 * @return true if the message was successfully sent immediately
-	 * 
-	 * @see SendMessage() for normal batched sending
+	 * @return true if the message was successfully sent
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages", meta = (DisplayName = "Send Message Now"))
 	bool SendMessageNow(const FString& Message);
@@ -247,21 +217,23 @@ public:
 	/**
 	 * Sends binary data through the WebSocket connection
 	 * 
-	 * Binary messages are sent as WebSocket binary frames, which are more efficient
-	 * for large data transfers or when you need to send non-text data.
+	 * Binary messages are sent as WebSocket binary frames.
 	 * 
 	 * @param Data The binary data to send
-	 * @param bHighPriority If true, bypasses batching and sends immediately
-	 * @return true if the binary message was successfully queued for transmission
+	 * @param bHighPriority Unused parameter (kept for API compatibility)
+	 * @return true if the binary message was successfully sent
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages")
 	bool SendBinaryMessage(const TArray<uint8>& Data, bool bHighPriority = false);
 
 	/**
-	 * Sends binary data immediately, bypassing batching
+	 * Sends binary data immediately (same as SendBinaryMessage)
 	 * 
-	 * @param Data The binary data to send immediately
-	 * @return true if the binary message was successfully sent immediately
+	 * This method is kept for API compatibility. All messages
+	 * are now sent immediately by default.
+	 * 
+	 * @param Data The binary data to send
+	 * @return true if the binary message was successfully sent
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages", meta = (DisplayName = "Send Binary Message Now"))
 	bool SendBinaryMessageNow(const TArray<uint8>& Data);
@@ -287,7 +259,7 @@ public:
 	/**
 	 * Enable or disable automatic reconnection
 	 * When enabled, the client will automatically attempt to reconnect
-	 * after connection loss with exponential backoff
+	 * after connection loss with simple retry logic
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Connection")
 	bool bAutoReconnect = true;
@@ -301,7 +273,7 @@ public:
 
 	/**
 	 * Delay between reconnection attempts in seconds
-	 * Each attempt uses exponential backoff: delay * (2 ^ attempt_number)
+	 * Simple delay used between reconnection attempts
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Connection", meta = (ClampMin = "0.5", ClampMax = "60.0"))
 	float ReconnectDelaySeconds = 2.0f;
@@ -462,34 +434,21 @@ protected:
 };
 
 /**
- * Simplified WebSocket Message API (Single-Client Architecture)
+ * Simplified WebSocket Message API
  * 
- * This WebSocket client uses a single, clear way to send messages:
+ * This WebSocket client uses a simple, direct approach for sending messages:
  * - Use SendMessage() for all message types (text/JSON)
+ * - Messages are sent immediately (no complex batching)
  * - Plain text is automatically wrapped in JSON format for server compatibility
- * - For structured messages, use UHorizonUtility helper functions:
- *   - UHorizonUtility::CreateChatMessage() for chat messages
- *   - UHorizonUtility::CreateGameActionMessage() for game actions
- *   - UHorizonUtility::CreateSystemMessage() for system messages
- *   - UHorizonUtility::CreatePlayerStatusMessage() for player status updates
- *   - UHorizonUtility::CreateJSONMessage() for custom messages
- * 
- * All UHorizonUtility helper functions automatically add UUID and timestamp fields.
+ * - For structured messages, use UHorizonUtility helper functions
  * 
  * Example usage:
- *   // Simple text message (auto-wrapped with UUID and timestamp)
+ *   // Simple text message
  *   Client->SendMessage("Hello World");
  *   
  *   // Chat message using UHorizonUtility
  *   FString ChatMsg = UHorizonUtility::CreateChatMessage("player123", "Hello!", "general");
  *   Client->SendMessage(ChatMsg);
- *   
- *   // Game action message
- *   TMap<FString, FString> ActionData;
- *   ActionData.Add("x", "100.5");
- *   ActionData.Add("y", "200.0");
- *   FString ActionMsg = UHorizonUtility::CreateGameActionMessage("player123", "move", ActionData);
- *   Client->SendMessage(ActionMsg);
  *   
  *   // Custom structured message
  *   TMap<FString, FString> CustomData;
