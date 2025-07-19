@@ -272,9 +272,6 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
             SendHeartbeat();
         }
     }
-
-    // Force flush batched messages (batching is always enabled)
-    ProcessOutgoingBatch(false);
 }
 
 TStatId UHorizonWebSocketClient::GetStatId() const
@@ -440,13 +437,6 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
         return false;
     }
     
-    // Check if we're over the pending message limit
-    if (PendingMessagesCount >= MaxPendingMessages)
-    {
-        LogMessage(FString::Printf(TEXT("Message queue full (%d messages pending)"), static_cast<int32>(PendingMessagesCount.load())), true);
-        return false;
-    }
-    
     // Check if message is already in JSON format (contains "namespace" and "event")
     FString MessageToSend;
     if (Message.Contains(TEXT("\"namespace\"")) && Message.Contains(TEXT("\"event\"")))
@@ -462,36 +452,13 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
         MessageToSend = UHorizonUtility::CreateJSONMessage(TEXT("game"), TEXT("message"), MessageData);
     }
     
-    // Create message object from pool
-    TSharedPtr<Horizon::WebSocket::FHorizonMessage> MessageObj = Horizon::WebSocket::FHorizonMessage::CreateTextMessage(MessageToSend);
-    
-    // Track statistics
-    SentMessagesCount++;
-    SentBytesCount += MessageObj->GetSize();
-    
-    // Increment pending message counter
-    PendingMessagesCount++;
-    
-    // If high priority, batching disabled, or immediate send requested, skip batching
-    if (bHighPriority || bDisableBatching)
+    // Send immediately using Async task (simplified approach)
+    AsyncTask(ENamedThreads::AnyBackgroundThread, [this, MessageToSend]()
     {
-        OutgoingHighPriorityMessages.Enqueue(MessageObj);
-        return true;
-    }
-    
-    // Add to batch by default
-    FScopeLock BatchLock(&BatchMutex);
-    BatchedMessages.Add(MessageObj);
-    
-    // Process batch if it's full or it's been a while
-    const bool bBatchFull = BatchedMessages.Num() >= BatchSize;
-    const double CurrentTime = FPlatformTime::Seconds();
-    const bool bTimeToFlush = (CurrentTime - LastBatchSendTime) > BatchTimeoutSeconds;
-    
-    if (bBatchFull || bTimeToFlush)
-    {
-        ProcessOutgoingBatch();
-    }
+        // Create WebSocket text frame and send
+        TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateTextFrame(MessageToSend, true);
+        SendSocketData(FrameData);
+    });
     
     return true;
 }
@@ -510,43 +477,16 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
         return false;
     }
     
-    // Check if we're over the pending message limit
-    if (PendingMessagesCount >= MaxPendingMessages)
+    // Send immediately using Async task (simplified approach)
+    AsyncTask(ENamedThreads::AnyBackgroundThread, [this, Data]()
     {
-        LogMessage(FString::Printf(TEXT("Message queue full (%d messages pending)"), static_cast<int32>(PendingMessagesCount.load())), true);
-        return false;
-    }
+        // Create WebSocket binary frame and send
+        TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateBinaryFrame(Data, true);
+        SendSocketData(FrameData);
+    });
     
-    // Create binary message object from pool
-    TSharedPtr<Horizon::WebSocket::FHorizonMessage> MessageObj = Horizon::WebSocket::FHorizonMessage::CreateBinaryMessage(Data);
-    
-    // Track statistics
-    SentMessagesCount++;
-    SentBytesCount += MessageObj->GetSize();
-    
-    // Increment pending message counter
-    PendingMessagesCount++;
-    
-    // If high priority, batching disabled, or immediate send requested, skip batching
-    if (bHighPriority || bDisableBatching)
-    {
-        OutgoingHighPriorityMessages.Enqueue(MessageObj);
-        return true;
-    }
-    
-    // Add to batch by default
-    FScopeLock BatchLock(&BatchMutex);
-    BatchedMessages.Add(MessageObj);
-    
-    // Process batch if it's full or it's been a while
-    const bool bBatchFull = BatchedMessages.Num() >= BatchSize;
-    const double CurrentTime = FPlatformTime::Seconds();
-    const bool bTimeToFlush = (CurrentTime - LastBatchSendTime) > BatchTimeoutSeconds;
-    
-    if (bBatchFull || bTimeToFlush)
-    {
-        ProcessOutgoingBatch();
-    }
+    return true;
+}
     
     return true;
 }
