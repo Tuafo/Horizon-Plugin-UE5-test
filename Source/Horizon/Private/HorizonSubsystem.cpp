@@ -3,101 +3,223 @@
 #include "HorizonWebSocketClient.h"
 #include "Horizon.h"
 #include "Engine/World.h"
-#include "TimerManager.h"
 
 void UHorizonSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	
 	UE_LOG(LogHorizon, Log, TEXT("Horizon Subsystem initialized"));
-
-	// Set up periodic cleanup timer (every 30 seconds)
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimer(CleanupTimer, this, &UHorizonSubsystem::CleanupInvalidClients, 30.0f, true);
-	}
 }
 
 void UHorizonSubsystem::Deinitialize()
 {
-	// Clear cleanup timer
-	if (UWorld* World = GetWorld())
+	// Disconnect and clean up the client
+	if (WebSocketClient)
 	{
-		World->GetTimerManager().ClearTimer(CleanupTimer);
+		UnregisterClientEventHandlers();
+		WebSocketClient->Disconnect();
+		WebSocketClient = nullptr;
 	}
 
-	// Disconnect and clean up all clients
-	DisconnectAllClients();
-	ManagedClients.Empty();
-
-	UE_LOG(LogHorizon, Log, TEXT("Horizon Subsystem deinitialized. Total clients created: %d, Success rate: %.1f%%"), 
-		TotalClientsCreated, GetConnectionSuccessRate());
+	UE_LOG(LogHorizon, Log, TEXT("Horizon Subsystem deinitialized. Connection attempts: %d, Success rate: %.1f%%"), 
+		TotalConnectionAttempts, GetConnectionSuccessRate());
 
 	Super::Deinitialize();
 }
 
-UHorizonWebSocketClient* UHorizonSubsystem::CreateWebSocket()
+UHorizonWebSocketClient* UHorizonSubsystem::GetWebSocketClient()
 {
-	UHorizonWebSocketClient* NewClient = NewObject<UHorizonWebSocketClient>(this);
-	if (NewClient)
+	if (!WebSocketClient)
 	{
-		// Apply global settings
-		NewClient->bEnableHeartbeat = bGlobalHeartbeatEnabled;
-		NewClient->HeartbeatIntervalSeconds = GlobalHeartbeatInterval;
-		NewClient->bVerboseLogging = bGlobalDebugMode;
-
-		ManagedClients.Add(NewClient);
-		RegisterClientEventHandlers(NewClient);
-		TotalClientsCreated++;
-
-		UE_LOG(LogHorizon, Log, TEXT("Created Horizon WebSocket client. Total managed clients: %d"), ManagedClients.Num());
-	}
-	else
-	{
-		UE_LOG(LogHorizon, Error, TEXT("Failed to create Horizon WebSocket client"));
-	}
-
-	return NewClient;
-}
-
-UHorizonWebSocketClient* UHorizonSubsystem::CreateAndConnectWebSocket(const FString& URL, const FString& Protocol)
-{
-	UHorizonWebSocketClient* NewClient = CreateWebSocket();
-	if (NewClient)
-	{
-		TotalConnectionAttempts++;
-		
-		if (NewClient->Connect(URL, Protocol))
+		WebSocketClient = NewObject<UHorizonWebSocketClient>(this);
+		if (WebSocketClient)
 		{
-			UE_LOG(LogHorizon, Log, TEXT("Created and connecting Horizon WebSocket client to %s"), *URL);
-			return NewClient;
+			RegisterClientEventHandlers();
+			UE_LOG(LogHorizon, Log, TEXT("Created Horizon WebSocket client"));
 		}
 		else
 		{
-			UE_LOG(LogHorizon, Error, TEXT("Failed to connect Horizon WebSocket client to %s"), *URL);
-			RemoveWebSocket(NewClient);
-			return nullptr;
+			UE_LOG(LogHorizon, Error, TEXT("Failed to create Horizon WebSocket client"));
 		}
 	}
 
-	return nullptr;
+	return WebSocketClient;
 }
 
-void UHorizonSubsystem::RemoveWebSocket(UHorizonWebSocketClient* Client)
+bool UHorizonSubsystem::Connect(const FString& URL, const FString& Protocol)
 {
-	if (Client && ManagedClients.Contains(Client))
+	UHorizonWebSocketClient* Client = GetWebSocketClient();
+	if (!Client)
 	{
-		UnregisterClientEventHandlers(Client);
-		Client->Disconnect();
-		ManagedClients.Remove(Client);
-		
-		UE_LOG(LogHorizon, Log, TEXT("Removed Horizon WebSocket client. Total managed clients: %d"), ManagedClients.Num());
+		return false;
+	}
+
+	TotalConnectionAttempts++;
+	
+	bool bResult = Client->Connect(URL, Protocol);
+	if (bResult)
+	{
+		UE_LOG(LogHorizon, Log, TEXT("Connecting Horizon WebSocket client to %s"), *URL);
+	}
+	else
+	{
+		UE_LOG(LogHorizon, Error, TEXT("Failed to connect Horizon WebSocket client to %s"), *URL);
+	}
+
+	return bResult;
+}
+
+void UHorizonSubsystem::Disconnect()
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->Disconnect();
+		UE_LOG(LogHorizon, Log, TEXT("Disconnecting Horizon WebSocket client"));
 	}
 }
 
-TArray<UHorizonWebSocketClient*> UHorizonSubsystem::GetAllWebSockets() const
+bool UHorizonSubsystem::SendMessage(const FString& Message)
 {
-	TArray<UHorizonWebSocketClient*> ValidClients;
+	if (WebSocketClient)
+	{
+		return WebSocketClient->SendMessage(Message);
+	}
+	return false;
+}
+
+bool UHorizonSubsystem::SendBinaryMessage(const TArray<uint8>& Data)
+{
+	if (WebSocketClient)
+	{
+		return WebSocketClient->SendBinaryMessage(Data);
+	}
+	return false;
+}
+
+bool UHorizonSubsystem::IsConnected() const
+{
+	return WebSocketClient ? WebSocketClient->IsConnected() : false;
+}
+
+EHorizonWebSocketState UHorizonSubsystem::GetConnectionState() const
+{
+	return WebSocketClient ? WebSocketClient->GetConnectionState() : EHorizonWebSocketState::Disconnected;
+}
+
+void UHorizonSubsystem::SetHeartbeatEnabled(bool bEnabled)
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->bEnableHeartbeat = bEnabled;
+	}
+}
+
+void UHorizonSubsystem::SetHeartbeatInterval(float IntervalSeconds)
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->HeartbeatIntervalSeconds = IntervalSeconds;
+	}
+}
+
+void UHorizonSubsystem::SetAutoReconnect(bool bEnabled)
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->bAutoReconnect = bEnabled;
+	}
+}
+
+void UHorizonSubsystem::SetMaxReconnectAttempts(int32 MaxAttempts)
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->MaxReconnectAttempts = MaxAttempts;
+	}
+}
+
+FString UHorizonSubsystem::GetHorizonStatus() const
+{
+	if (!WebSocketClient)
+	{
+		return TEXT("No WebSocket client");
+	}
+
+	FString StateStr;
+	switch (WebSocketClient->GetConnectionState())
+	{
+		case EHorizonWebSocketState::Disconnected: StateStr = TEXT("Disconnected"); break;
+		case EHorizonWebSocketState::Connecting: StateStr = TEXT("Connecting"); break;
+		case EHorizonWebSocketState::Connected: StateStr = TEXT("Connected"); break;
+		case EHorizonWebSocketState::Closing: StateStr = TEXT("Closing"); break;
+		case EHorizonWebSocketState::Closed: StateStr = TEXT("Closed"); break;
+		case EHorizonWebSocketState::Failed: StateStr = TEXT("Failed"); break;
+		case EHorizonWebSocketState::Reconnecting: StateStr = TEXT("Reconnecting"); break;
+		default: StateStr = TEXT("Unknown"); break;
+	}
+
+	return FString::Printf(TEXT("State: %s, Server: %s, Attempts: %d/%d"), 
+		*StateStr, 
+		*WebSocketClient->GetServerURL(), 
+		WebSocketClient->GetCurrentReconnectAttempts(),
+		WebSocketClient->MaxReconnectAttempts);
+}
+
+void UHorizonSubsystem::RegisterClientEventHandlers()
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->OnConnected.AddDynamic(this, &UHorizonSubsystem::HandleClientConnected);
+		WebSocketClient->OnConnectionError.AddDynamic(this, &UHorizonSubsystem::HandleClientConnectionError);
+		WebSocketClient->OnClosed.AddDynamic(this, &UHorizonSubsystem::HandleClientClosed);
+		WebSocketClient->OnMessage.AddDynamic(this, &UHorizonSubsystem::HandleClientMessage);
+	}
+}
+
+void UHorizonSubsystem::UnregisterClientEventHandlers()
+{
+	if (WebSocketClient)
+	{
+		WebSocketClient->OnConnected.RemoveDynamic(this, &UHorizonSubsystem::HandleClientConnected);
+		WebSocketClient->OnConnectionError.RemoveDynamic(this, &UHorizonSubsystem::HandleClientConnectionError);
+		WebSocketClient->OnClosed.RemoveDynamic(this, &UHorizonSubsystem::HandleClientClosed);
+		WebSocketClient->OnMessage.RemoveDynamic(this, &UHorizonSubsystem::HandleClientMessage);
+	}
+}
+
+void UHorizonSubsystem::HandleClientConnected(bool bSuccess)
+{
+	if (bSuccess)
+	{
+		TotalSuccessfulConnections++;
+		UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket client connected successfully"));
+	}
+	else
+	{
+		UE_LOG(LogHorizon, Warning, TEXT("Horizon WebSocket client connection failed"));
+	}
+	
+	OnConnected.Broadcast(bSuccess);
+}
+
+void UHorizonSubsystem::HandleClientConnectionError(const FString& ErrorMessage)
+{
+	UE_LOG(LogHorizon, Error, TEXT("Horizon WebSocket connection error: %s"), *ErrorMessage);
+	OnConnectionError.Broadcast(ErrorMessage);
+}
+
+void UHorizonSubsystem::HandleClientClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
+{
+	UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket connection closed: %d - %s (Clean: %s)"), 
+		StatusCode, *Reason, bWasClean ? TEXT("Yes") : TEXT("No"));
+	OnClosed.Broadcast(StatusCode, Reason, bWasClean);
+}
+
+void UHorizonSubsystem::HandleClientMessage(const FString& Message)
+{
+	UE_LOG(LogHorizon, VeryVerbose, TEXT("Horizon WebSocket received message: %s"), *Message);
+	OnMessage.Broadcast(Message);
+}
 	for (UHorizonWebSocketClient* Client : ManagedClients)
 	{
 		if (IsValid(Client))

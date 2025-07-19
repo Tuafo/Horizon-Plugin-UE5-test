@@ -12,8 +12,8 @@ enum class EHorizonWebSocketState : uint8;
 
 /**
  * Horizon Subsystem
- * Provides centralized management of Horizon WebSocket clients across the game instance
- * Handles automatic cleanup and provides global access to Horizon functionality
+ * Provides centralized management of a single Horizon WebSocket client per game instance
+ * Simplified for single-client use case with improved stability
  */
 UCLASS()
 class HORIZON_API UHorizonSubsystem : public UGameInstanceSubsystem
@@ -26,116 +26,102 @@ public:
 	virtual void Deinitialize() override;
 
 	/**
-	 * Create a new WebSocket client managed by this subsystem
-	 * @return New WebSocket client instance
+	 * Get or create the single WebSocket client for this game instance
+	 * @return The WebSocket client instance
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem", meta = (CallInEditor = "true"))
-	UHorizonWebSocketClient* CreateWebSocket();
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Client", meta = (CallInEditor = "true"))
+	UHorizonWebSocketClient* GetWebSocketClient();
 
 	/**
-	 * Create and immediately connect a WebSocket client
+	 * Connect the WebSocket client to a server
 	 * @param URL The WebSocket server URL
 	 * @param Protocol The WebSocket protocol (optional)
-	 * @return New connected WebSocket client instance, or nullptr if connection failed
+	 * @return True if connection was initiated successfully
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem")
-	UHorizonWebSocketClient* CreateAndConnectWebSocket(const FString& URL, const FString& Protocol = TEXT(""));
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Client")
+	bool Connect(const FString& URL, const FString& Protocol = TEXT(""));
 
 	/**
-	 * Remove a WebSocket client from management and clean it up
-	 * @param Client The client to remove
+	 * Disconnect the WebSocket client
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem")
-	void RemoveWebSocket(UHorizonWebSocketClient* Client);
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Client")
+	void Disconnect();
 
 	/**
-	 * Get all active WebSocket clients
-	 * @return Array of all managed WebSocket clients
+	 * Send a message through the WebSocket client
+	 * @param Message The message to send
+	 * @return True if message was queued for sending
 	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem")
-	TArray<UHorizonWebSocketClient*> GetAllWebSockets() const;
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Client")
+	bool SendMessage(const FString& Message);
 
 	/**
-	 * Get all connected WebSocket clients
-	 * @return Array of all connected WebSocket clients
+	 * Send binary data through the WebSocket client
+	 * @param Data The binary data to send
+	 * @return True if data was queued for sending
 	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem")
-	TArray<UHorizonWebSocketClient*> GetConnectedWebSockets() const;
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Client")
+	bool SendBinaryMessage(const TArray<uint8>& Data);
 
 	/**
-	 * Find WebSocket clients by server URL
-	 * @param URL The server URL to search for
-	 * @return Array of clients connected to the specified URL
+	 * Check if the WebSocket client is connected
+	 * @return True if connected
 	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem")
-	TArray<UHorizonWebSocketClient*> FindWebSocketsByURL(const FString& URL) const;
+	UFUNCTION(BlueprintPure, Category = "Horizon|Client")
+	bool IsConnected() const;
 
 	/**
-	 * Disconnect all managed WebSocket clients
+	 * Get the current connection state
+	 * @return Current connection state
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem")
-	void DisconnectAllClients();
+	UFUNCTION(BlueprintPure, Category = "Horizon|Client")
+	EHorizonWebSocketState GetConnectionState() const;
+
+	// Events for monitoring WebSocket activity
+	UPROPERTY(BlueprintAssignable, Category = "Horizon|Client Events")
+	FOnHorizonWebSocketConnected OnConnected;
+
+	UPROPERTY(BlueprintAssignable, Category = "Horizon|Client Events")
+	FOnHorizonWebSocketConnectionError OnConnectionError;
+
+	UPROPERTY(BlueprintAssignable, Category = "Horizon|Client Events")
+	FOnHorizonWebSocketClosed OnClosed;
+
+	UPROPERTY(BlueprintAssignable, Category = "Horizon|Client Events")
+	FOnHorizonWebSocketMessage OnMessage;
+
+	// Configuration
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Configuration")
+	void SetHeartbeatEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Configuration")
+	void SetHeartbeatInterval(float IntervalSeconds);
+
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Configuration")
+	void SetAutoReconnect(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "Horizon|Configuration")
+	void SetMaxReconnectAttempts(int32 MaxAttempts);
 
 	/**
-	 * Get the number of active WebSocket clients
-	 * @return Number of managed clients
+	 * Get Horizon system status
+	 * @return Status information as a formatted string
 	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem")
-	int32 GetActiveClientCount() const;
-
-	/**
-	 * Get the number of connected WebSocket clients
-	 * @return Number of connected clients
-	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem")
-	int32 GetConnectedClientCount() const;
-
-	/**
-	 * Broadcast a message to all connected clients
-	 * @param Message The message to broadcast
-	 * @return Number of clients the message was sent to
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem")
-	int32 BroadcastMessage(const FString& Message);
-
-	/**
-	 * Broadcast a binary message to all connected clients
-	 * @param Data The binary data to broadcast
-	 * @return Number of clients the message was sent to
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem")
-	int32 BroadcastBinaryMessage(const TArray<uint8>& Data);
-
-	/**
-	 * Clean up invalid client references
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem")
-	void CleanupInvalidClients();
-
-	// Events for monitoring all WebSocket activity
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|Subsystem Events")
-	FOnHorizonWebSocketConnected OnAnyClientConnected;
-
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|Subsystem Events")
-	FOnHorizonWebSocketConnectionError OnAnyClientConnectionError;
-
-	UPROPERTY(BlueprintAssignable, Category = "Horizon|Subsystem Events")
-	FOnHorizonWebSocketClosed OnAnyClientClosed;
+	UFUNCTION(BlueprintPure, Category = "Horizon|Status")
+	FString GetHorizonStatus() const;
 
 protected:
 	/**
-	 * Register event handlers for a new client
-	 * @param Client The client to register handlers for
+	 * Register event handlers for the client
 	 */
-	void RegisterClientEventHandlers(UHorizonWebSocketClient* Client);
+	void RegisterClientEventHandlers();
 
 	/**
-	 * Unregister event handlers for a client
-	 * @param Client The client to unregister handlers from
+	 * Unregister event handlers for the client
 	 */
-	void UnregisterClientEventHandlers(UHorizonWebSocketClient* Client);
+	void UnregisterClientEventHandlers();
 
-	// Event handlers for global monitoring
+	// Event handlers for forwarding
 	UFUNCTION()
 	void HandleClientConnected(bool bSuccess);
 
@@ -145,63 +131,29 @@ protected:
 	UFUNCTION()
 	void HandleClientClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
 
-private:
-	// All managed WebSocket clients
-	UPROPERTY()
-	TArray<UHorizonWebSocketClient*> ManagedClients;
+	UFUNCTION()
+	void HandleClientMessage(const FString& Message);
 
-	// Cleanup timer
-	FTimerHandle CleanupTimer;
+private:
+	// Single WebSocket client
+	UPROPERTY()
+	UHorizonWebSocketClient* WebSocketClient;
 
 	// Statistics
-	int32 TotalClientsCreated = 0;
 	int32 TotalConnectionAttempts = 0;
 	int32 TotalSuccessfulConnections = 0;
 
 public:
 	// Statistics getters
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem|Statistics")
-	int32 GetTotalClientsCreated() const { return TotalClientsCreated; }
-
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem|Statistics")
+	UFUNCTION(BlueprintPure, Category = "Horizon|Statistics")
 	int32 GetTotalConnectionAttempts() const { return TotalConnectionAttempts; }
 
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem|Statistics")
+	UFUNCTION(BlueprintPure, Category = "Horizon|Statistics")
 	int32 GetTotalSuccessfulConnections() const { return TotalSuccessfulConnections; }
 
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem|Statistics")
+	UFUNCTION(BlueprintPure, Category = "Horizon|Statistics")
 	float GetConnectionSuccessRate() const 
 	{ 
 		return TotalConnectionAttempts > 0 ? (float)TotalSuccessfulConnections / TotalConnectionAttempts * 100.0f : 0.0f; 
 	}
-
-	// Horizon-specific features
-
-	/**
-	 * Get Horizon system status
-	 * @return Status information as a formatted string
-	 */
-	UFUNCTION(BlueprintPure, Category = "Horizon|Subsystem|Status")
-	FString GetHorizonStatus() const;
-
-	/**
-	 * Enable or disable debug mode for all clients
-	 * @param bEnableDebug Whether to enable debug mode
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem|Debug")
-	void SetGlobalDebugMode(bool bEnableDebug);
-
-	/**
-	 * Set global heartbeat settings for all future clients
-	 * @param bEnable Whether to enable heartbeat
-	 * @param Interval Heartbeat interval in seconds
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|Subsystem|Configuration")
-	void SetGlobalHeartbeatSettings(bool bEnable, float Interval = 30.0f);
-
-private:
-	// Global settings
-	bool bGlobalDebugMode = false;
-	bool bGlobalHeartbeatEnabled = true;
-	float GlobalHeartbeatInterval = 30.0f;
 };

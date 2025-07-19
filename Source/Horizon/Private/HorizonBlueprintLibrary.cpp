@@ -7,47 +7,178 @@
 #include "Misc/Guid.h"
 #include "Misc/DateTime.h"
 #include "Dom/JsonObject.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
 
-UHorizonWebSocketClient* UHorizonBlueprintLibrary::CreateWebSocket(const UObject* WorldContext)
+UHorizonWebSocketClient* UHorizonBlueprintLibrary::GetWebSocketClient(const UObject* WorldContext)
 {
 	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
 	{
-		return Subsystem->CreateWebSocket();
+		return Subsystem->GetWebSocketClient();
 	}
 
 	UE_LOG(LogHorizon, Error, TEXT("Failed to get Horizon subsystem"));
 	return nullptr;
 }
 
-UHorizonWebSocketClient* UHorizonBlueprintLibrary::QuickConnect(const UObject* WorldContext, const FString& URL, const FString& Protocol)
+bool UHorizonBlueprintLibrary::Connect(const UObject* WorldContext, const FString& URL, const FString& Protocol)
 {
 	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
 	{
-		return Subsystem->CreateAndConnectWebSocket(URL, Protocol);
+		return Subsystem->Connect(URL, Protocol);
 	}
 
-	UE_LOG(LogHorizon, Error, TEXT("Failed to get Horizon subsystem for quick connect"));
-	return nullptr;
+	UE_LOG(LogHorizon, Error, TEXT("Failed to get Horizon subsystem for connection"));
+	return false;
 }
 
-int32 UHorizonBlueprintLibrary::BroadcastToAllClients(const UObject* WorldContext, const FString& Message)
+void UHorizonBlueprintLibrary::Disconnect(const UObject* WorldContext)
 {
 	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
 	{
-		return Subsystem->BroadcastMessage(Message);
+		Subsystem->Disconnect();
+	}
+}
+
+bool UHorizonBlueprintLibrary::SendMessage(const UObject* WorldContext, const FString& Message)
+{
+	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
+	{
+		return Subsystem->SendMessage(Message);
 	}
 
-	return 0;
+	return false;
 }
 
-void UHorizonBlueprintLibrary::DisconnectAllClients(const UObject* WorldContext)
+bool UHorizonBlueprintLibrary::SendBinaryMessage(const UObject* WorldContext, const TArray<uint8>& Data)
 {
 	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
 	{
-		Subsystem->DisconnectAllClients();
+		return Subsystem->SendBinaryMessage(Data);
+	}
+
+	return false;
+}
+
+bool UHorizonBlueprintLibrary::IsConnected(const UObject* WorldContext)
+{
+	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
+	{
+		return Subsystem->IsConnected();
+	}
+
+	return false;
+}
+
+EHorizonWebSocketState UHorizonBlueprintLibrary::GetConnectionState(const UObject* WorldContext)
+{
+	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
+	{
+		return Subsystem->GetConnectionState();
+	}
+
+	return EHorizonWebSocketState::Disconnected;
+}
+
+bool UHorizonBlueprintLibrary::IsHorizonWebSocketAvailable()
+{
+	return FHorizonModule::IsAvailable();
+}
+
+FString UHorizonBlueprintLibrary::ConnectionStateToString(EHorizonWebSocketState State)
+{
+	switch (State)
+	{
+		case EHorizonWebSocketState::Disconnected: return TEXT("Disconnected");
+		case EHorizonWebSocketState::Connecting: return TEXT("Connecting");
+		case EHorizonWebSocketState::Connected: return TEXT("Connected");
+		case EHorizonWebSocketState::Closing: return TEXT("Closing");
+		case EHorizonWebSocketState::Closed: return TEXT("Closed");
+		case EHorizonWebSocketState::Failed: return TEXT("Failed");
+		case EHorizonWebSocketState::Reconnecting: return TEXT("Reconnecting");
+		default: return TEXT("Unknown");
+	}
+}
+
+bool UHorizonBlueprintLibrary::IsValidWebSocketURL(const FString& URL)
+{
+	// Simple validation - check if URL starts with ws:// or wss://
+	return URL.StartsWith(TEXT("ws://")) || URL.StartsWith(TEXT("wss://"));
+}
+
+void UHorizonBlueprintLibrary::GetConnectionStatistics(const UObject* WorldContext, int32& OutTotalAttempts, int32& OutTotalSuccessful, float& OutSuccessRate)
+{
+	if (UHorizonSubsystem* Subsystem = GetHorizonSubsystem(WorldContext))
+	{
+		OutTotalAttempts = Subsystem->GetTotalConnectionAttempts();
+		OutTotalSuccessful = Subsystem->GetTotalSuccessfulConnections();
+		OutSuccessRate = Subsystem->GetConnectionSuccessRate();
+	}
+	else
+	{
+		OutTotalAttempts = 0;
+		OutTotalSuccessful = 0;
+		OutSuccessRate = 0.0f;
+	}
+}
+
+FString UHorizonBlueprintLibrary::CreateSimpleJSONMessage(const FString& MessageType, const FString& Data)
+{
+	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
+	JsonObject->SetStringField(TEXT("type"), MessageType);
+	JsonObject->SetStringField(TEXT("data"), Data);
+
+	FString OutputString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputString);
+	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+
+	return OutputString;
+}
+
+TArray<uint8> UHorizonBlueprintLibrary::StringToByteArray(const FString& StringData)
+{
+	TArray<uint8> ByteArray;
+	FTCHARToUTF8 Convert(*StringData);
+	ByteArray.Append((uint8*)Convert.Get(), Convert.Length());
+	return ByteArray;
+}
+
+FString UHorizonBlueprintLibrary::ByteArrayToString(const TArray<uint8>& ByteData)
+{
+	return FString(UTF8_TO_TCHAR(ByteData.GetData()));
+}
+
+FString UHorizonBlueprintLibrary::GenerateClientID()
+{
+	FGuid NewGuid = FGuid::NewGuid();
+	return NewGuid.ToString(EGuidFormats::DigitsWithHyphensInBraces);
+}
+
+FString UHorizonBlueprintLibrary::GetHorizonVersion()
+{
+	return FHorizonModule::GetVersion();
+}
+
+UHorizonSubsystem* UHorizonBlueprintLibrary::GetHorizonSubsystem(const UObject* WorldContext)
+{
+	if (!WorldContext)
+	{
+		return nullptr;
+	}
+
+	UWorld* World = WorldContext->GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	UGameInstance* GameInstance = World->GetGameInstance();
+	if (!GameInstance)
+	{
+		return nullptr;
+	}
+
+	return GameInstance->GetSubsystem<UHorizonSubsystem>();
+}
 	}
 }
 
