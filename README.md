@@ -1,679 +1,734 @@
-# HorizonWebSocketClient
+# Horizon WebSocket Plugin for Unreal Engine 5
 
-A high-performance, thread-safe WebSocket client implementation for Unreal Engine with support for both **batched** and **immediate** message processing modes.
+A high-performance, thread-safe WebSocket client implementation for Unreal Engine 5, designed for real-time communication with custom servers. Built from the ground up for single-player applications with enterprise-grade reliability and performance.
 
-## Features
+## 🚀 Key Features
 
-- ✅ **Dual Processing Modes**: Choose between batched (optimized) or immediate (real-time) processing
-- ✅ **Thread-Safe**: All operations are thread-safe with proper mutex protection
-- ✅ **Auto-Reconnection**: Configurable reconnection with exponential backoff
-- ✅ **Heartbeat Support**: Keep connections alive with customizable ping/pong
-- ✅ **Blueprint Compatible**: Full Blueprint node support
-- ✅ **Binary & Text Messages**: Support for both message types
-- ✅ **WebSocket Protocol Compliant**: Full RFC 6455 implementation
-- ✅ **Secure Connections**: Support for both WS and WSS protocols
+- ✅ **Performance Optimized**: Advanced message batching and thread-pool architecture
+- ✅ **Thread-Safe**: Complete thread safety with proper synchronization
+- ✅ **Auto-Reconnection**: Intelligent reconnection with exponential backoff
+- ✅ **Immediate Sending**: High-priority message bypassing for time-critical data
+- ✅ **Blueprint Compatible**: Full Blueprint node support with comprehensive API
+- ✅ **Message Pooling**: Memory-efficient object reuse for high-frequency messaging
+- ✅ **Comprehensive Logging**: Detailed debugging and performance monitoring
+- ✅ **WebSocket Compliant**: Full RFC 6455 implementation with WSS support
+- ✅ **Single-Client Architecture**: Optimized for single-player games and applications
 
-## Processing Modes
+## 🏗️ Architecture Overview
 
-### Batched Processing (Default)
-- Messages queued and processed on game thread tick
-- **Latency**: ~16ms (one frame at 60fps)
-- **CPU Usage**: Lower for high-frequency messaging
-- **Use Case**: General messaging, non-critical data
-
-### Immediate Processing
-- Messages processed immediately upon receipt/send
-- **Latency**: <1ms
-- **CPU Usage**: Slightly higher due to immediate processing
-- **Use Case**: Real-time games, trading systems, live collaboration
-
-## Quick Start
-
-### Complete Blueprint Implementation Example
+The Horizon WebSocket Plugin follows a clean, scalable architecture designed for single-player applications:
 
 ```mermaid
 graph TD
-    %% Main Blueprint Flow
-    START[Event BeginPlay] --> CREATE[Create Horizon WebSocket Client Object]
-    CREATE --> STORE[Set WebSocket Client Variable]
+    subgraph "Game Instance Layer"
+        GI[Game Instance]
+        HS[Horizon Subsystem]
+        GI --> HS
+    end
     
-    %% Configuration Chain
-    STORE --> CONFIG1[Set Immediate Processing = True]
-    CONFIG1 --> CONFIG2[Set Auto Reconnect = True] 
-    CONFIG2 --> CONFIG3[Set Max Reconnect Attempts = 5]
-    CONFIG3 --> CONFIG4[Set Heartbeat Interval Seconds = 30.0]
-    CONFIG4 --> CONFIG5[Set Verbose Logging = True]
+    subgraph "Actor/Component Layer"
+        AC[Your Actor]
+        HC[Horizon WebSocket Component]
+        AC --> HC
+    end
     
-    %% Event Binding Chain
-    CONFIG5 --> BIND1[Bind Event to On Connected]
-    BIND1 --> BIND2[Bind Event to On Message]
-    BIND2 --> BIND3[Bind Event to On Message Sent]
-    BIND3 --> BIND4[Bind Event to On Closed]
-    BIND4 --> BIND5[Bind Event to On Raw Message]
-    BIND5 --> BIND6[Bind Event to On Connection Error]
-    
-    %% Connection
-    BIND6 --> CONNECT[Connect Node]
-    CONNECT --> URL[URL: ws://localhost:8080/websocket]
-    CONNECT --> PROTOCOL[Protocol: Leave Empty]
-    
-    %% Event Handler: On Connected
-    subgraph "Custom Event: Handle Connected"
-        direction TB
-        CONN_START[Event Handle Connected] --> CONN_CHECK{"Success Pin = True?"}
-        CONN_CHECK -->|True| CONN_SUCCESS[Print String: WebSocket Connected!]
-        CONN_CHECK -->|False| CONN_FAIL[Print String: Connection Failed!]
+    subgraph "Core WebSocket Layer"
+        WC[Horizon WebSocket Client]
+        TM[Thread Manager]
+        MB[Message Batcher]
+        PM[Performance Monitor]
+        MF[Message Factory]
         
-        CONN_SUCCESS --> SEND_HELLO[Send Message: Hello from Blueprint!]
-        SEND_HELLO --> MAKE_BINARY[Make Array Byte]
-        MAKE_BINARY --> ADD_BYTES[Add: 72,101,108,108,111]
-        ADD_BYTES --> SEND_BIN[Send Binary Message]
+        WC --> TM
+        WC --> MB
+        WC --> PM
+        WC --> MF
     end
     
-    %% Event Handler: On Message
-    subgraph "Custom Event: Handle Message"
-        direction TB
-        MSG_START[Event Handle Message] --> MSG_PRINT[Print String: Received Message]
-        MSG_PRINT --> MSG_FORMAT[Format Text: Echo plus message]
-        MSG_FORMAT --> MSG_REPLY[Send Message]
-        
-        %% Message parsing branch
-        MSG_START --> MSG_CONTAINS{"Message Contains: position"}
-        MSG_CONTAINS -->|True| PARSE_POS[Parse Position Data]
-        MSG_CONTAINS -->|False| MSG_REPLY
-        PARSE_POS --> UPDATE_UI[Update Player Position UI]
+    subgraph "Message System"
+        MSG[Message Container]
+        MP[Message Pool]
+        MF --> MSG
+        MSG --> MP
     end
     
-    %% Event Handler: On Message Sent
-    subgraph "Custom Event: Handle Message Sent"
-        direction TB
-        SENT_START[Event Handle Message Sent] --> SENT_PRINT[Print String: Message Sent Successfully]
-        SENT_PRINT --> SENT_LOG[Append to Log Widget]
+    subgraph "Utility Layer"
+        HU[Horizon Utility]
+        HBL[Horizon Blueprint Library]
     end
     
-    %% Input Handling
-    subgraph "Input Action: Send Player Position"
-        direction TB
-        INPUT_START[InputAction SendPosition] --> GET_PLAYER[Get Player Controller]
-        GET_PLAYER --> GET_PAWN[Get Controlled Pawn]
-        GET_PAWN --> GET_LOC[Get Actor Location]
-        GET_LOC --> BREAK_VEC[Break Vector]
-        BREAK_VEC --> FORMAT_POS[Format Text: position X Y Z]
-        FORMAT_POS --> SEND_POS[Send Message]
+    subgraph "Protocol Layer"
+        WSP[WebSocket Protocol]
+        MSG[Message System]
+        CONN[Connection Manager]
     end
     
-    %% Error Handling
-    subgraph "Custom Event: Handle Connection Error"
-        direction TB
-        ERR_START[Event Handle Connection Error] --> ERR_PRINT[Print String: Connection Error]
-        ERR_PRINT --> ERR_LOG[Log Error to File]
-        ERR_LOG --> ERR_RETRY[Delay 5 Seconds]
-        ERR_RETRY --> ERR_RECONNECT[Force Reconnect]
-    end
+    HC --> HS
+    HS --> WC
+    WC --> WSP
+    WC --> MSG
+    WC --> CONN
     
-    %% Cleanup
-    subgraph "Event EndPlay"
-        direction TB
-        END_START[Event EndPlay] --> END_CHECK{"WebSocket Client Valid?"}
-        END_CHECK -->|True| END_DISCONNECT[Disconnect]
-        END_CHECK -->|False| END_COMPLETE[End]
-        END_DISCONNECT --> END_CLEAR[Clear WebSocket Client Variable]
-        END_CLEAR --> END_COMPLETE
-    end
+    HC --> HBL
+    WC --> HU
+    MF --> MSG
+    MSG --> MP
     
-    %% Styling for different node types
-    classDef eventNode fill:#e74c3c,stroke:#c0392b,color:#fff,font-weight:bold
-    classDef configNode fill:#3498db,stroke:#2980b9,color:#fff
-    classDef bindNode fill:#9b59b6,stroke:#8e44ad,color:#fff
-    classDef actionNode fill:#27ae60,stroke:#229954,color:#fff
-    classDef conditionNode fill:#f39c12,stroke:#d68910,color:#fff
-    classDef dataNode fill:#95a5a6,stroke:#7f8c8d,color:#fff
-    
-    %% Apply styles
-    class START,CONN_START,MSG_START,SENT_START,INPUT_START,ERR_START,END_START eventNode
-    class CONFIG1,CONFIG2,CONFIG3,CONFIG4,CONFIG5 configNode
-    class BIND1,BIND2,BIND3,BIND4,BIND5,BIND6 bindNode
-    class CREATE,CONNECT,SEND_HELLO,SEND_BIN,MSG_REPLY,SEND_POS,END_DISCONNECT actionNode
-    class CONN_CHECK,MSG_CONTAINS,END_CHECK conditionNode
-    class URL,PROTOCOL,MAKE_BINARY,ADD_BYTES dataNode
+    WSP -.-> SERVER[WebSocket Server]
 ```
 
-## Blueprint Step-by-Step Guide
+## 📊 Message Flow Architecture
 
-### 1. Initial Setup in Blueprint
+Understanding how messages flow through the system is crucial for optimal performance:
 
 ```mermaid
-graph LR
-    A["🎮 Event BeginPlay"] --> B["📦 Create Object from Class"]
-    B --> C["🔗 HorizonWebSocketClient"]
-    C --> D["💾 Set Variable: WebSocketClient"]
+sequenceDiagram
+    participant BP as Blueprint/C++
+    participant HC as WebSocket Component
+    participant WC as WebSocket Client
+    participant MB as Message Batcher
+    participant TM as Thread Manager
+    participant SERVER as WebSocket Server
     
-    subgraph "Node Details"
-        B1["Class: Horizon Web Socket Client<br/>Return Value → WebSocketClient Variable"]
+    BP->>HC: Connect("ws://server:8080")
+    HC->>WC: Create & Configure Client
+    WC->>SERVER: WebSocket Handshake
+    SERVER->>WC: Handshake Response
+    WC->>HC: OnConnected Event
+    HC->>BP: OnConnected Delegate
+    
+    BP->>HC: SendMessage("Hello Server")
+    HC->>WC: QueueMessage(Message)
+    
+    alt Immediate Sending Mode
+        WC->>TM: Execute Immediate Send
+        TM->>SERVER: Send Message Directly
+    else Batched Sending Mode
+        WC->>MB: Add to Batch Queue
+        MB->>MB: Wait for Batch Size/Timer
+        MB->>TM: Execute Batch Send
+        TM->>SERVER: Send Batched Messages
     end
     
-    B -.-> B1
+    SERVER->>WC: Message Sent Confirmation
+    WC->>HC: OnMessageSent Event
+    HC->>BP: OnMessageSent Delegate
+    
+    SERVER->>WC: Incoming Message
+    WC->>TM: Process on Background Thread
+    TM->>WC: Parsed Message
+    WC->>HC: OnMessage Event
+    HC->>BP: OnMessage Delegate
+    
+    WC->>PM: Update Metrics
+    PM->>PM: Calculate Throughput
+    PM->>BP: Performance Stats (if requested)
 ```
 
-### 2. Configuration Nodes Chain
+## � Message Factory Architecture
 
-```mermaid
-graph LR
-    A["💾 WebSocketClient Variable"] --> B1["⚡ Set Immediate Processing"]
-    B1 --> B2["🔄 Set Auto Reconnect"] 
-    B2 --> B3["🔢 Set Max Reconnect Attempts"]
-    B3 --> B4["💓 Set Heartbeat Interval Seconds"]
-    B4 --> B5["📝 Set Verbose Logging"]
-    
-    subgraph "Values"
-        V1["True"]
-        V2["True"]
-        V3["5"]
-        V4["30.0"]
-        V5["True"]
-    end
-    
-    B1 -.-> V1
-    B2 -.-> V2
-    B3 -.-> V3
-    B4 -.-> V4
-    B5 -.-> V5
-```
-
-### 3. Event Binding Chain
-
-```mermaid
-graph LR
-    A["📝 Set Verbose Logging"] --> B1["🔗 Bind Event to On Connected"]
-    B1 --> B2["🔗 Bind Event to On Message"]
-    B2 --> B3["🔗 Bind Event to On Message Sent"]
-    B3 --> B4["🔗 Bind Event to On Closed"]
-    B4 --> B5["🔗 Bind Event to On Raw Message"]
-    B5 --> B6["🔗 Bind Event to On Connection Error"]
-    
-    subgraph "Custom Events"
-        E1["Handle Connected"]
-        E2["Handle Message"]
-        E3["Handle Message Sent"]
-        E4["Handle Closed"]
-        E5["Handle Raw Message"]
-        E6["Handle Connection Error"]
-    end
-    
-    B1 -.-> E1
-    B2 -.-> E2
-    B3 -.-> E3
-    B4 -.-> E4
-    B5 -.-> E5
-    B6 -.-> E6
-```
-
-### 4. Connection Node
-
-```mermaid
-graph LR
-    A["🔗 Bind Event to On Connection Error"] --> B["🌐 Connect"]
-    
-    subgraph "Connect Parameters"
-        P1["URL: ws://localhost:8080/websocket"]
-        P2["Protocol: (leave empty)"]
-    end
-    
-    B --> P1
-    B --> P2
-    
-    B --> C["✅ Execution continues to event handlers"]
-```
-
-## C++ Implementation Examples
-
-### Basic Setup
-
-```cpp
-// YourGameMode.h
-UCLASS()
-class YOURGAME_API AYourGameMode : public AGameModeBase
-{
-    GENERATED_BODY()
-
-public:
-    AYourGameMode();
-
-protected:
-    virtual void BeginPlay() override;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WebSocket")
-    UHorizonWebSocketClient* WebSocketClient;
-
-    // Event handlers
-    UFUNCTION()
-    void OnWebSocketConnected(bool bSuccess);
-    
-    UFUNCTION()
-    void OnWebSocketMessage(const FString& Message);
-    
-    UFUNCTION()
-    void OnWebSocketMessageSent(const FString& Message);
-    
-    UFUNCTION()
-    void OnWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
-    
-    UFUNCTION()
-    void OnWebSocketConnectionError(const FString& Error);
-    
-    UFUNCTION()
-    void OnWebSocketRawMessage(const TArray<uint8>& Data, int32 Count, int32 Remaining);
-};
-```
-
-### Implementation with Immediate Processing
-
-```cpp
-// YourGameMode.cpp
-AYourGameMode::AYourGameMode()
-{
-    WebSocketClient = CreateDefaultSubobject<UHorizonWebSocketClient>(TEXT("WebSocketClient"));
-}
-
-void AYourGameMode::BeginPlay()
-{
-    Super::BeginPlay();
-
-    if (WebSocketClient)
-    {
-        // Configure for immediate processing (real-time)
-        WebSocketClient->bImmediateProcessing = true;
-        
-        // Connection settings
-        WebSocketClient->bAutoReconnect = true;
-        WebSocketClient->MaxReconnectAttempts = 5;
-        WebSocketClient->ReconnectDelaySeconds = 2.0f;
-        
-        // Heartbeat settings
-        WebSocketClient->bEnableHeartbeat = true;
-        WebSocketClient->HeartbeatIntervalSeconds = 30.0f;
-        WebSocketClient->HeartbeatMessage = TEXT("ping");
-        
-        // Logging
-        WebSocketClient->bVerboseLogging = true;
-
-        // Bind events
-        WebSocketClient->OnConnected.AddDynamic(this, &AYourGameMode::OnWebSocketConnected);
-        WebSocketClient->OnMessage.AddDynamic(this, &AYourGameMode::OnWebSocketMessage);
-        WebSocketClient->OnMessageSent.AddDynamic(this, &AYourGameMode::OnWebSocketMessageSent);
-        WebSocketClient->OnClosed.AddDynamic(this, &AYourGameMode::OnWebSocketClosed);
-        WebSocketClient->OnConnectionError.AddDynamic(this, &AYourGameMode::OnWebSocketConnectionError);
-        WebSocketClient->OnRawMessage.AddDynamic(this, &AYourGameMode::OnWebSocketRawMessage);
-
-        // Connect to server
-        WebSocketClient->Connect("ws://localhost:8080/websocket", "");
-    }
-}
-
-void AYourGameMode::OnWebSocketConnected(bool bSuccess)
-{
-    if (bSuccess)
-    {
-        UE_LOG(LogTemp, Log, TEXT("✅ WebSocket connected successfully!"));
-        
-        // Send initial message
-        WebSocketClient->SendMessage(TEXT("Hello from Unreal Engine!"));
-        
-        // Send binary data
-        TArray<uint8> BinaryData = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-        WebSocketClient->SendBinaryMessage(BinaryData);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("❌ Failed to connect to WebSocket"));
-    }
-}
-
-void AYourGameMode::OnWebSocketMessage(const FString& Message)
-{
-    UE_LOG(LogTemp, Log, TEXT("📨 Received: %s"), *Message);
-    
-    // Echo back with timestamp
-    FDateTime Now = FDateTime::Now();
-    FString EchoMessage = FString::Printf(TEXT("Echo at %s: %s"), 
-        *Now.ToString(), *Message);
-    WebSocketClient->SendMessage(EchoMessage);
-}
-
-void AYourGameMode::OnWebSocketMessageSent(const FString& Message)
-{
-    UE_LOG(LogTemp, Log, TEXT("📤 Sent: %s"), *Message);
-}
-
-void AYourGameMode::OnWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
-{
-    UE_LOG(LogTemp, Warning, TEXT("🔌 Connection closed - Code: %d, Reason: %s, Clean: %s"), 
-        StatusCode, *Reason, bWasClean ? TEXT("Yes") : TEXT("No"));
-}
-
-void AYourGameMode::OnWebSocketConnectionError(const FString& Error)
-{
-    UE_LOG(LogTemp, Error, TEXT("💥 Connection error: %s"), *Error);
-}
-
-void AYourGameMode::OnWebSocketRawMessage(const TArray<uint8>& Data, int32 Count, int32 Remaining)
-{
-    UE_LOG(LogTemp, Log, TEXT("📦 Received binary data: %d bytes"), Count);
-    
-    // Convert to hex string for logging
-    FString HexString = FString::Printf(TEXT("Raw data: "));
-    for (int32 i = 0; i < FMath::Min(Data.Num(), 20); i++) // Log first 20 bytes
-    {
-        HexString += FString::Printf(TEXT("%02X "), Data[i]);
-    }
-    if (Data.Num() > 20)
-    {
-        HexString += TEXT("...");
-    }
-    UE_LOG(LogTemp, Log, TEXT("%s"), *HexString);
-}
-```
-
-### Real-Time Game Example
-
-```cpp
-// Real-time multiplayer game example
-class YOURGAME_API AMultiplayerGameMode : public AGameModeBase
-{
-    GENERATED_BODY()
-
-public:
-    // Send player position update
-    UFUNCTION(BlueprintCallable)
-    void SendPlayerPosition(APlayerController* Player, FVector Position, FRotator Rotation);
-    
-    // Send game state update
-    UFUNCTION(BlueprintCallable)
-    void SendGameStateUpdate(const FString& GameState);
-
-protected:
-    UPROPERTY()
-    UHorizonWebSocketClient* GameWebSocket;
-    
-    UFUNCTION()
-    void OnGameMessage(const FString& Message);
-};
-
-void AMultiplayerGameMode::BeginPlay()
-{
-    Super::BeginPlay();
-    
-    GameWebSocket = NewObject<UHorizonWebSocketClient>(this);
-    
-    // CRITICAL: Enable immediate processing for real-time games
-    GameWebSocket->bImmediateProcessing = true;
-    
-    // Optimize for low latency
-    GameWebSocket->bEnableHeartbeat = true;
-    GameWebSocket->HeartbeatIntervalSeconds = 10.0f; // More frequent heartbeats
-    
-    GameWebSocket->OnMessage.AddDynamic(this, &AMultiplayerGameMode::OnGameMessage);
-    GameWebSocket->Connect("ws://gameserver.com:8080/game", "realtime-game");
-}
-
-void AMultiplayerGameMode::SendPlayerPosition(APlayerController* Player, FVector Position, FRotator Rotation)
-{
-    if (GameWebSocket && GameWebSocket->IsConnected())
-    {
-        // Create JSON message
-        FString PositionMessage = FString::Printf(TEXT(
-            "{"
-            "\"type\":\"player_position\","
-            "\"player_id\":\"%s\","
-            "\"position\":{\"x\":%.2f,\"y\":%.2f,\"z\":%.2f},"
-            "\"rotation\":{\"pitch\":%.2f,\"yaw\":%.2f,\"roll\":%.2f},"
-            "\"timestamp\":%lld"
-            "}"), 
-            *Player->GetUniqueID().ToString(),
-            Position.X, Position.Y, Position.Z,
-            Rotation.Pitch, Rotation.Yaw, Rotation.Roll,
-            FDateTime::Now().ToUnixTimestamp()
-        );
-        
-        // Send immediately (< 1ms latency with immediate processing)
-        GameWebSocket->SendMessage(PositionMessage);
-    }
-}
-
-void AMultiplayerGameMode::OnGameMessage(const FString& Message)
-{
-    // Parse and handle game messages immediately
-    // This fires within ~1ms of message receipt in immediate mode
-    
-    // Example: Parse JSON and update game state
-    TSharedPtr<FJsonObject> JsonObject;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Message);
-    
-    if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-    {
-        FString MessageType = JsonObject->GetStringField(TEXT("type"));
-        
-        if (MessageType == TEXT("player_position"))
-        {
-            // Handle player position update immediately
-            FString PlayerID = JsonObject->GetStringField(TEXT("player_id"));
-            // ... update player position in real-time
-        }
-        else if (MessageType == TEXT("game_event"))
-        {
-            // Handle game events immediately
-            FString EventType = JsonObject->GetStringField(TEXT("event"));
-            // ... process game event
-        }
-    }
-}
-```
-
-### Trading/Financial Data Example
-
-```cpp
-// High-frequency trading data example
-class YOURGAME_API ATradingDataReceiver : public AActor
-{
-    GENERATED_BODY()
-
-public:
-    ATradingDataReceiver();
-
-protected:
-    virtual void BeginPlay() override;
-
-    UPROPERTY()
-    UHorizonWebSocketClient* TradingWebSocket;
-    
-    UFUNCTION()
-    void OnMarketData(const FString& Message);
-    
-    UFUNCTION()
-    void OnTradingBinaryData(const TArray<uint8>& Data, int32 Count, int32 Remaining);
-
-private:
-    // Track latency for performance monitoring
-    TArray<float> LatencyMeasurements;
-    FDateTime LastMessageTime;
-};
-
-void ATradingDataReceiver::BeginPlay()
-{
-    Super::BeginPlay();
-    
-    TradingWebSocket = NewObject<UHorizonWebSocketClient>(this);
-    
-    // CRITICAL: Immediate processing for financial data
-    TradingWebSocket->bImmediateProcessing = true;
-    
-    // Optimize for ultra-low latency
-    TradingWebSocket->bEnableHeartbeat = true;
-    TradingWebSocket->HeartbeatIntervalSeconds = 5.0f; // Very frequent heartbeats
-    TradingWebSocket->bVerboseLogging = false; // Reduce logging overhead
-    
-    TradingWebSocket->OnMessage.AddDynamic(this, &ATradingDataReceiver::OnMarketData);
-    TradingWebSocket->OnRawMessage.AddDynamic(this, &ATradingDataReceiver::OnTradingBinaryData);
-    
-    // Connect to trading data feed
-    TradingWebSocket->Connect("wss://api.trading.com/v1/feed", "market-data");
-}
-
-void ATradingDataReceiver::OnMarketData(const FString& Message)
-{
-    // Process market data with minimal latency
-    FDateTime ReceiveTime = FDateTime::Now();
-    
-    // Calculate processing latency
-    if (!LastMessageTime.GetTicks() == 0)
-    {
-        float LatencyMs = (ReceiveTime - LastMessageTime).GetTotalMilliseconds();
-        LatencyMeasurements.Add(LatencyMs);
-        
-        // Log every 100 messages
-        if (LatencyMeasurements.Num() % 100 == 0)
-        {
-            float AvgLatency = 0.0f;
-            for (float Latency : LatencyMeasurements)
-            {
-                AvgLatency += Latency;
-            }
-            AvgLatency /= LatencyMeasurements.Num();
-            
-            UE_LOG(LogTemp, Log, TEXT("📊 Avg processing latency: %.2fms"), AvgLatency);
-            LatencyMeasurements.Empty(); // Reset for next batch
-        }
-    }
-    
-    LastMessageTime = ReceiveTime;
-    
-    // Parse market data immediately
-    // {"symbol":"BTCUSD","price":45000.50,"volume":1.25,"timestamp":1640995200}
-    TSharedPtr<FJsonObject> JsonObject;
-    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Message);
-    
-    if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
-    {
-        FString Symbol = JsonObject->GetStringField(TEXT("symbol"));
-        double Price = JsonObject->GetNumberField(TEXT("price"));
-        double Volume = JsonObject->GetNumberField(TEXT("volume"));
-        
-        // Update trading UI immediately (< 1ms with immediate processing)
-        // Broadcast to trading widgets, update charts, etc.
-    }
-}
-```
-
-## Configuration Reference
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `bImmediateProcessing` | `bool` | `false` | Enable immediate message processing (< 1ms latency) |
-| `bAutoReconnect` | `bool` | `true` | Automatically reconnect on connection loss |
-| `MaxReconnectAttempts` | `int32` | `5` | Maximum number of reconnection attempts |
-| `ReconnectDelaySeconds` | `float` | `2.0f` | Base delay between reconnection attempts |
-| `bEnableHeartbeat` | `bool` | `true` | Enable heartbeat/keepalive mechanism |
-| `HeartbeatIntervalSeconds` | `float` | `30.0f` | Interval between heartbeat messages |
-| `HeartbeatMessage` | `FString` | `"ping"` | Message to send for heartbeat |
-| `bVerboseLogging` | `bool` | `false` | Enable detailed logging |
-
-## Performance Comparison
-
-```mermaid
-graph LR
-    subgraph "Batched Processing"
-        A1[Message Arrives] --> A2[Queue Message]
-        A2 --> A3[Wait for Tick]
-        A3 --> A4[Process on Game Thread]
-        A4 --> A5[Fire Delegate]
-        A5 --> A6[~16ms Total Latency]
-    end
-    
-    subgraph "Immediate Processing"
-        B1[Message Arrives] --> B2[Process Immediately]
-        B2 --> B3[Dispatch to Game Thread]
-        B3 --> B4[Fire Delegate]
-        B4 --> B5[<1ms Total Latency]
-    end
-```
-
-## Thread Safety
+The plugin now uses a centralized message factory system for better organization and performance:
 
 ```mermaid
 graph TD
-    A[Worker Thread] --> B[Socket Operations]
-    A --> C[Handshake]
-    A --> D[Raw Data Handling]
+    subgraph "Message Creation Layer"
+        MF[Message Factory]
+        subgraph "Factory Methods"
+            TEXT[CreateTextMessage]
+            JSON[CreateJSONMessage]
+            CHAT[CreateChatMessage]
+            GAME[CreateGameActionMessage]
+            SYS[CreateSystemMessage]
+            STATUS[CreatePlayerStatusMessage]
+            BIN[CreateBinaryMessage]
+        end
+        
+        MF --> TEXT
+        MF --> JSON
+        MF --> CHAT
+        MF --> GAME
+        MF --> SYS
+        MF --> STATUS
+        MF --> BIN
+    end
     
-    E[Game Thread] --> F[Delegate Callbacks]
-    E --> G[Public API Calls]
-    E --> H[Blueprint Events]
+    subgraph "Message Container Layer"
+        MSG[HorizonMessage]
+        POOL[Message Pool]
+        
+        MSG --> POOL
+    end
     
-    I[Thread-Safe Components] --> J[Message Queues]
-    I --> K[Connection State]
-    I --> L[Socket Mutex]
-    I --> M[State Mutex]
+    subgraph "WebSocket Layer"
+        WC[WebSocket Client]
+        SEND[Send Methods]
+        
+        WC --> SEND
+    end
     
-    B -.->|Async Task| F
-    D -.->|Immediate/Queue| F
+    TEXT --> MSG
+    JSON --> MSG
+    CHAT --> MSG
+    GAME --> MSG
+    SYS --> MSG
+    STATUS --> MSG
+    BIN --> MSG
+    
+    MSG --> WC
+    POOL --> WC
 ```
 
-## Best Practices
+### Key Benefits:
 
-### When to Use Immediate Processing
-- ✅ Real-time multiplayer games
-- ✅ Trading/financial applications
-- ✅ Live collaboration tools
-- ✅ IoT sensor data
-- ✅ Video streaming control
+1. **Centralized Message Creation**: All message creation is now handled by `FHorizonMessageFactory`
+2. **Better Performance**: Integrated with the message pooling system
+3. **Type Safety**: Proper message type management and validation
+4. **Consistent Structure**: All messages follow the same architectural patterns
+5. **Extensible**: Easy to add new message types without modifying multiple files
 
-### When to Use Batched Processing
-- ✅ General web communication
-- ✅ Non-critical notifications
-- ✅ Bulk data transfer
-- ✅ High-frequency, non-latency-sensitive data
-- ✅ Battery-powered devices
+### Usage Examples:
 
-### Performance Tips
-1. **Use immediate processing sparingly** - Only when latency matters
-2. **Optimize heartbeat intervals** - Lower for critical connections
-3. **Disable verbose logging** in production for immediate mode
-4. **Monitor CPU usage** with high-frequency immediate processing
-5. **Use binary messages** for large data transfers
+```cpp
+// Create messages using the factory
+auto ChatMessage = FHorizonMessageFactory::CreateChatMessage("player123", "Hello world!", "general");
+auto GameMessage = FHorizonMessageFactory::CreateGameActionMessage("player123", "jump", {{"x", "100"}, {"y", "200"}});
+auto SystemMessage = FHorizonMessageFactory::CreateSystemMessage("maintenance", {{"duration", "5 minutes"}});
 
-## Troubleshooting
+// Send messages
+WebSocket->SendMessage(ChatMessage);
+WebSocket->SendMessageNow(GameMessage->GetText());
+```
+
+## �🔄 Batching vs Immediate Sending
+
+The plugin supports two distinct sending modes, each optimized for different use cases:
+
+```mermaid
+graph TD
+    subgraph "Message Types"
+        CRITICAL[Critical Messages]
+        BULK[Bulk Messages]
+    end
+    
+    subgraph "Immediate Sending Path"
+        IS[Immediate Send]
+        BT[Bypass Batching]
+        DS[Direct Socket Send]
+        
+        CRITICAL --> IS
+        IS --> BT
+        BT --> DS
+    end
+    
+    subgraph "Batched Sending Path"
+        BS[Batch Queue]
+        BW[Batch Wait]
+        BC[Batch Combine]
+        BSS[Batch Socket Send]
+        
+        BULK --> BS
+        BS --> BW
+        BW --> BC
+        BC --> BSS
+    end
+    
+    subgraph "Performance Impact"
+        LOW[Low Latency - Higher CPU]
+        HIGH[High Throughput - Lower CPU]
+        
+        DS --> LOW
+        BSS --> HIGH
+    end
+```
+
+## 🎯 Blueprint Integration
+
+The plugin provides comprehensive Blueprint support with intuitive nodes:
+
+```mermaid
+graph LR
+    subgraph "Connection Management"
+        CBP[Create WebSocket]
+        CONN[Connect]
+        DISC[Disconnect]
+        
+        CBP --> CONN
+        CONN --> DISC
+    end
+    
+    subgraph "Message Handling"
+        SEND[Send Message]
+        RECV[On Message Received]
+        SENT[On Message Sent]
+        
+        SEND --> SENT
+        RECV --> SENT
+    end
+    
+    subgraph "Status Monitoring"
+        STAT[Get Connection State]
+        PERF[Get Performance Stats]
+        
+        STAT --> PERF
+    end
+    
+    subgraph "Event Handling"
+        OCONN[On Connected]
+        OERR[On Error]
+        OCLOSE[On Closed]
+        
+        OCONN --> OERR
+        OERR --> OCLOSE
+    end
+```
+
+## 🧵 Threading and Performance
+
+The plugin uses a sophisticated threading model for optimal performance:
+
+```mermaid
+graph TD
+    subgraph "Main Game Thread"
+        GT[Game Thread]
+        UI[UI Updates]
+        
+        GT --> UI
+    end
+    
+    subgraph "WebSocket Thread Pool"
+        subgraph "Worker Threads"
+            WT1[Worker Thread 1]
+            WT2[Worker Thread 2]
+            WT3[Worker Thread 3]
+            WTN[Worker Thread N]
+        end
+        
+        TM[Thread Manager]
+        TM --> WT1
+        TM --> WT2
+        TM --> WT3
+        TM --> WTN
+    end
+    
+    subgraph "Performance Monitoring"
+        PM[Performance Monitor]
+        STATS[Statistics Collection]
+        
+        PM --> STATS
+    end
+    
+    subgraph "Memory Management"
+        MP[Message Pool]
+        GC[Garbage Collection]
+        
+        MP --> GC
+    end
+    
+    GT -.-> TM
+    TM -.-> GT
+    
+    WT1 --> PM
+    WT2 --> PM
+    WT3 --> PM
+    WTN --> PM
+    
+    WT1 --> MP
+    WT2 --> MP
+    WT3 --> MP
+    WTN --> MP
+```
+
+## 🔧 Configuration and Settings
+
+The plugin provides comprehensive configuration options through the Project Settings:
+
+```mermaid
+graph TD
+    subgraph "Project Settings - Plugins - Horizon"
+        subgraph "WebSocket Settings"
+            WS_AUTO[Auto-connect on Start]
+            WS_URL[Default Server URL]
+            WS_PROTO[WebSocket Protocol]
+            WS_TIMEOUT[Connection Timeout]
+            WS_HEARTBEAT[Heartbeat Interval]
+            WS_RECONNECT[Auto-reconnect Settings]
+        end
+        
+        subgraph "Performance Settings"
+            PERF_THREADS[Thread Pool Size]
+            PERF_BATCH[Batch Size]
+            PERF_DELAY[Batch Delay]
+            PERF_POOL[Message Pool Size]
+            PERF_BUFFER[Buffer Sizes]
+        end
+        
+        subgraph "Logging Settings"
+            LOG_LEVEL[Log Level]
+            LOG_VERBOSE[Verbose Logging]
+            LOG_CONN[Connection Events]
+            LOG_MSG[Message Events]
+            LOG_PERF[Performance Metrics]
+        end
+        
+        subgraph "Security Settings"
+            SEC_SSL[SSL Certificate Verification]
+            SEC_INSECURE[Allow Insecure Connections]
+            SEC_MAXSIZE[Maximum Message Size]
+            SEC_TIMEOUT[Security Timeouts]
+        end
+        
+        subgraph "Development Settings"
+            DEV_DEBUG[Debug Mode]
+            DEV_SERVERS[Debug Server URLs]
+            DEV_AUTOCONNECT[Auto-connect in PIE]
+            DEV_SIMULATE[Simulate Failures]
+        end
+    end
+    
+    WS_AUTO --> PERF_THREADS
+    PERF_THREADS --> LOG_LEVEL
+    LOG_LEVEL --> SEC_SSL
+    SEC_SSL --> DEV_DEBUG
+```
+
+## 🎮 Usage Examples
+
+### Blueprint Usage
+
+1. **Add WebSocket Component to your Actor:**
+   ```
+   Components > Add Component > Horizon WebSocket Component
+   ```
+
+2. **Configure the component:**
+   - Set `Auto Connect` to `true`
+   - Set `Auto Connect URL` to your server (e.g., `ws://localhost:8080`)
+   - Configure performance settings as needed
+
+3. **Handle WebSocket events:**
+   ```
+   Event Graph:
+   - Event OnConnected → Print "Connected to server!"
+   - Event OnMessage → Print "Received: " + Message
+   - Event OnClosed → Print "Disconnected from server"
+   ```
+
+4. **Send messages:**
+   ```
+   Input Event → WebSocket Component → Send Message → "Hello Server!"
+   ```
+
+### C++ Usage
+
+1. **Include the necessary headers:**
+   ```cpp
+   #include "Utils/HorizonBlueprintLibrary.h"
+   #include "WebSocket/HorizonWebSocketClient.h"
+   #include "WebSocket/HorizonMessage.h"
+   ```
+
+2. **Create and configure a WebSocket client:**
+   ```cpp
+   // Create WebSocket client
+   UHorizonWebSocketClient* WebSocket = UHorizonBlueprintLibrary::CreateWebSocket();
+   
+   // Bind to events
+   WebSocket->OnConnected.AddDynamic(this, &AMyActor::OnWebSocketConnected);
+   WebSocket->OnMessage.AddDynamic(this, &AMyActor::OnWebSocketMessage);
+   WebSocket->OnClosed.AddDynamic(this, &AMyActor::OnWebSocketClosed);
+   
+   // Connect to server
+   WebSocket->Connect(TEXT("ws://localhost:8080"));
+   ```
+
+3. **Handle WebSocket events:**
+   ```cpp
+   UFUNCTION()
+   void AMyActor::OnWebSocketConnected(bool bSuccess)
+   {
+       if (bSuccess)
+       {
+           UE_LOG(LogTemp, Log, TEXT("Connected to WebSocket server"));
+           
+           // Create and send a message using the factory
+           auto WelcomeMessage = FHorizonMessageFactory::CreateChatMessage(
+               TEXT("player123"), 
+               TEXT("Hello from Unreal!"), 
+               TEXT("general")
+           );
+           WebSocket->SendMessage(WelcomeMessage);
+       }
+   }
+   
+   UFUNCTION()
+   void AMyActor::OnWebSocketMessage(const FString& Message)
+   {
+       UE_LOG(LogTemp, Log, TEXT("Received message: %s"), *Message);
+       
+       // Parse incoming message
+       FString Namespace, Event, Data;
+       if (FHorizonMessageFactory::ParseJSONMessage(Message, Namespace, Event, Data))
+       {
+           UE_LOG(LogTemp, Log, TEXT("Parsed - Namespace: %s, Event: %s"), *Namespace, *Event);
+       }
+   }
+   
+   UFUNCTION()
+   void AMyActor::OnWebSocketClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
+   {
+       UE_LOG(LogTemp, Log, TEXT("WebSocket closed: %d - %s"), StatusCode, *Reason);
+   }
+   ```
+
+### Advanced C++ Usage
+
+1. **Using the Horizon Subsystem directly:**
+   ```cpp
+   // Get the Horizon subsystem
+   UHorizonSubsystem* HorizonSubsystem = GetGameInstance()->GetSubsystem<UHorizonSubsystem>();
+   
+   // Create and configure WebSocket
+   UHorizonWebSocketClient* WebSocket = HorizonSubsystem->CreateWebSocket();
+   WebSocket->SetBatchSize(1000);
+   WebSocket->SetMaxPendingMessages(10000);
+   
+   // Connect with custom protocol
+   WebSocket->Connect(TEXT("ws://localhost:8080"), TEXT("my-custom-protocol"));
+   ```
+
+2. **Performance monitoring:**
+   ```cpp
+   // Get performance metrics
+   FString PerformanceStats = WebSocket->GetPerformanceStats(true);
+   UE_LOG(LogTemp, Log, TEXT("WebSocket Performance: %s"), *PerformanceStats);
+   
+   // Check connection state
+   EHorizonWebSocketState State = WebSocket->GetConnectionState();
+   bool bIsConnected = WebSocket->IsConnected();
+   ```
+
+3. **Advanced message handling with factory:**
+   ```cpp
+   // Create different message types
+   auto ChatMessage = FHorizonMessageFactory::CreateChatMessage(
+       TEXT("player123"), 
+       TEXT("Hello everyone!"), 
+       TEXT("general")
+   );
+   
+   auto GameActionMessage = FHorizonMessageFactory::CreateGameActionMessage(
+       TEXT("player123"), 
+       TEXT("jump"), 
+       {
+           {TEXT("x"), TEXT("100.5")},
+           {TEXT("y"), TEXT("200.0")},
+           {TEXT("z"), TEXT("50.0")}
+       }
+   );
+   
+   auto SystemMessage = FHorizonMessageFactory::CreateSystemMessage(
+       TEXT("maintenance"), 
+       {
+           {TEXT("duration"), TEXT("5 minutes")},
+           {TEXT("reason"), TEXT("Server update")}
+       }
+   );
+   
+   // Send messages with different priorities
+   WebSocket->SendMessage(ChatMessage);           // Normal priority (batched)
+   WebSocket->SendMessageNow(GameActionMessage->GetText());  // High priority (immediate)
+   WebSocket->SendMessage(SystemMessage);         // Normal priority (batched)
+   
+   // Create and send binary message
+   TArray<uint8> BinaryData = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
+   auto BinaryMessage = FHorizonMessageFactory::CreateBinaryMessage(BinaryData);
+   WebSocket->SendBinaryMessageNow(BinaryMessage->GetData());
+   ```
+
+## 📝 Configuration Reference
+
+### WebSocket Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Default Heartbeat Enabled` | `true` | Enable automatic heartbeat messages |
+| `Default Heartbeat Interval` | `30.0s` | Time between heartbeat messages |
+| `Default Max Reconnect Attempts` | `3` | Maximum reconnection attempts |
+| `Default Reconnect Delay` | `5.0s` | Delay between reconnection attempts |
+| `Default Auto Reconnect` | `true` | Enable automatic reconnection |
+| `Default Heartbeat Message` | `"ping"` | Content of heartbeat messages |
+
+### Performance Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Thread Pool Size` | `0` (auto) | Number of worker threads |
+| `Thread Stack Size` | `256KB` | Stack size for worker threads |
+| `Thread Priority` | `Above Normal` | Priority for worker threads |
+| `Enable Message Pooling` | `true` | Enable object pooling for messages |
+| `Max Pool Size` | `5000` | Maximum pooled message objects |
+| `Initial Pool Size` | `500` | Initial pooled message objects |
+| `Default Batch Size` | `500` | Messages per batch |
+| `Max Batch Delay` | `0.05s` | Maximum batching delay |
+
+### Logging Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Enable Verbose Logging` | `false` | Enable detailed debug logging |
+| `Log Connection Events` | `true` | Log connection/disconnection events |
+| `Log Message Events` | `false` | Log message send/receive events |
+| `Log Heartbeat Events` | `false` | Log heartbeat message events |
+
+### Security Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Allow Insecure Connections` | `true` | Allow `ws://` connections |
+| `Verify SSL Certificates` | `true` | Verify SSL certificates for `wss://` |
+| `Connection Timeout` | `30.0s` | Connection establishment timeout |
+| `Max Message Size` | `1MB` | Maximum incoming message size |
+
+## 🔍 Performance Monitoring
+
+The plugin includes comprehensive performance monitoring:
+
+```cpp
+// Get detailed performance metrics
+FString PerfStats = WebSocket->GetPerformanceStats(true);
+
+// Performance metrics include:
+// - Messages sent/received per second
+// - Bytes sent/received per second
+// - Average and peak latency
+// - Thread pool utilization
+// - Memory pool efficiency
+// - Connection uptime
+// - Error rates
+```
+
+## 🛠️ Troubleshooting
 
 ### Common Issues
 
-**High CPU Usage in Immediate Mode**
+1. **Connection fails immediately:**
+   - Check if the server URL is correct
+   - Verify the server is running and accepting connections
+   - Check firewall settings
+
+2. **Messages not being received:**
+   - Ensure event delegates are properly bound
+   - Check if the connection is still active
+   - Verify server is sending valid WebSocket frames
+
+3. **Performance issues:**
+   - Increase thread pool size for high-throughput scenarios
+   - Adjust batch size based on your message patterns
+   - Enable message pooling for frequent messaging
+
+4. **Memory issues:**
+   - Check message pool configuration
+   - Monitor for memory leaks in message handling
+   - Ensure proper cleanup of WebSocket clients
+
+### Debug Settings
+
+Enable debug mode in Project Settings > Plugins > Horizon:
+- `Enable Debug Mode`: Shows additional logging
+- `Debug Server URLs`: Pre-configured test servers
+- `Auto Connect in PIE`: Automatically connect when playing in editor
+- `Simulate Connection Failures`: Test error handling
+
+## 🎯 Best Practices
+
+1. **Use the WebSocket Component for simple scenarios:**
+   ```cpp
+   // Best for: Simple actor-based WebSocket usage
+   UHorizonWebSocketComponent* Component = CreateDefaultSubobject<UHorizonWebSocketComponent>(TEXT("WebSocket"));
+   ```
+
+2. **Use the Subsystem for complex scenarios:**
+   ```cpp
+   // Best for: Game-wide WebSocket management
+   UHorizonSubsystem* Subsystem = GetGameInstance()->GetSubsystem<UHorizonSubsystem>();
+   ```
+
+3. **Choose the right sending mode:**
+   ```cpp
+   // For time-critical data (position updates, input)
+   WebSocket->SendMessageNow(TEXT("Critical data"));
+   
+   // For bulk data (chat, game events)
+   WebSocket->SendMessage(TEXT("Regular data"));
+   ```
+
+4. **Monitor performance:**
+   ```cpp
+   // Regularly check performance metrics
+   FString Stats = WebSocket->GetPerformanceStats();
+   UE_LOG(LogTemp, Log, TEXT("WebSocket Performance: %s"), *Stats);
+   ```
+
+5. **Handle errors gracefully:**
+   ```cpp
+   WebSocket->OnConnectionError.AddDynamic(this, &AMyActor::OnConnectionError);
+   WebSocket->OnClosed.AddDynamic(this, &AMyActor::OnConnectionClosed);
+   ```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔄 Migration Guide
+
+### From Legacy Utility Functions to Message Factory
+
+The plugin architecture has been modernized with a centralized message factory system. All message creation now goes through `FHorizonMessageFactory` for better organization and performance.
+
+#### Modern Approach:
 ```cpp
-// Solution: Increase worker thread sleep time slightly
-WebSocketClient->bImmediateProcessing = true;
-// The worker thread automatically uses 1ms sleep in immediate mode
-// vs 10ms in batched mode
+// Use the message factory for all message creation
+auto ChatMessage = FHorizonMessageFactory::CreateChatMessage("player123", "Hello!", "general");
+auto GameMessage = FHorizonMessageFactory::CreateGameActionMessage("player123", "jump", {{"x", "100"}});
+WebSocket->SendMessage(ChatMessage);
+
+// For immediate sending (high priority)
+WebSocket->SendMessageNow(GameMessage->GetText());
+
+// Or use utility functions for immediate sending with automatic factory usage
+UHorizonUtility::SendChatMessageNow(WebSocket, "player123", "Urgent!", "general");
 ```
 
-**Connection Timeouts**
-```cpp
-// Solution: Adjust heartbeat settings
-WebSocketClient->bEnableHeartbeat = true;
-WebSocketClient->HeartbeatIntervalSeconds = 15.0f; // More frequent
-```
+#### Key Architectural Benefits:
+- **Centralized Creation**: All message types created through one factory
+- **Better Performance**: Integrated with message pooling system
+- **Type Safety**: Proper message type management and validation
+- **Cleaner Code**: Clear separation between message creation and sending
+- **Extensible**: Easy to add new message types without touching multiple files
 
-**Memory Leaks**
-```cpp
-// Ensure proper cleanup in EndPlay
-void AYourActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-    if (WebSocketClient)
-    {
-        WebSocketClient->Disconnect();
-        WebSocketClient = nullptr;
-    }
-    Super::EndPlay(EndPlayReason);
-}
-```
+#### What Changed:
+1. **Message Creation**: Now handled by `FHorizonMessageFactory`
+2. **Utility Functions**: Focus on operational helpers and immediate sending
+3. **Better Organization**: Message operations properly grouped in message system
+4. **Performance**: Factory integrates with pooling for optimal memory usage
 
-## Contributing
+#### Migration Steps:
+1. Replace direct message creation with factory methods
+2. Include `#include "WebSocket/HorizonMessage.h"` in your headers
+3. Update any Blueprint graphs to use new factory approaches
+4. Utility immediate sending functions still work but now use factory internally
 
-Please ensure all contributions maintain thread safety and include both Blueprint and C++ examples in documentation.
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📞 Support
+
+For support, please:
+1. Check the [Issues](https://github.com/your-repo/horizon-plugin/issues) page
+2. Review the troubleshooting section above
+3. Enable debug logging for detailed diagnostics
+
+---
+
+**Made with ❤️ for the Unreal Engine community**
