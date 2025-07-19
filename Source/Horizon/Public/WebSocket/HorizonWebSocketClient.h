@@ -338,77 +338,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Logging")
 	bool bVerboseLogging = false;
 	
-	// Performance Configuration
-	
-	/**
-	 * Maximum number of messages to include in a single batch
-	 * 
-	 * Higher values:
-	 * - Reduce network overhead by combining multiple messages
-	 * - Better throughput for high-frequency messaging
-	 * - Slightly increased latency as messages wait for batch completion
-	 * 
-	 * Lower values:
-	 * - Reduced latency as messages are sent more frequently
-	 * - Higher network overhead due to more individual transmissions
-	 * - Better for real-time applications requiring immediate responses
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Performance", meta = (ClampMin = "100", ClampMax = "100000"))
-	int32 BatchSize = 500;
-	
-	/**
-	 * Maximum number of messages that can be queued for sending
-	 * 
-	 * Acts as a backpressure mechanism to prevent memory exhaustion
-	 * when messages are generated faster than they can be transmitted.
-	 * When the queue is full, new messages will be dropped.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Performance")
-	int32 MaxPendingMessages = 50000;
-	
-	/**
-	 * Enables message object pooling for memory efficiency
-	 * 
-	 * When enabled:
-	 * - Message objects are reused to reduce garbage collection
-	 * - Better performance for high-frequency messaging
-	 * - Slightly more memory usage for the object pool
-	 * 
-	 * When disabled:
-	 * - New message objects are created for each message
-	 * - More garbage collection but lower baseline memory usage
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Performance")
-	bool bEnableMessagePooling = true;
-	
-	/**
-	 * Maximum time to wait before flushing a batch (in seconds)
-	 * 
-	 * This setting controls the trade-off between latency and throughput:
-	 * - Higher values: Better batching efficiency, higher latency
-	 * - Lower values: Lower latency, less efficient batching
-	 * - 0.0: Disable batching entirely (send immediately)
-	 * 
-	 * Default: 0.01 seconds (10ms) provides good balance
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Performance", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float BatchTimeoutSeconds = 0.01f;
-	
-	/**
-	 * Disable batching entirely - send all messages immediately
-	 * 
-	 * When true:
-	 * - All messages are sent with high priority
-	 * - Minimum latency but maximum network overhead
-	 * - Best for real-time applications where every millisecond matters
-	 * 
-	 * When false:
-	 * - Messages are batched according to BatchSize and BatchTimeoutSeconds
-	 * - Better throughput and network efficiency
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Performance")
-	bool bDisableBatching = false;
-	
 	// Internal Interface Methods
 	
 	/**
@@ -424,26 +353,6 @@ public:
 	 * @return true if data was received
 	 */
 	bool ReceiveSocketData(TArray<uint8>& OutData);
-	
-	/**
-	 * Internal method for queuing incoming data for processing
-	 * @param Data The raw incoming data to queue
-	 */
-	void EnqueueIncomingData(const TArray<uint8>& Data);
-	
-	/**
-	 * Internal method for dequeuing outgoing messages
-	 * @param OutMessage The message to send
-	 * @return true if a message was dequeued
-	 */
-	bool DequeueOutgoingMessage(FString& OutMessage);
-	
-	/**
-	 * Internal method for dequeuing outgoing binary messages
-	 * @param OutData The binary data to send
-	 * @return true if data was dequeued
-	 */
-	bool DequeueOutgoingBinaryMessage(TArray<uint8>& OutData);
 	
 	/**
 	 * Internal method for logging socket messages
@@ -510,6 +419,7 @@ protected:
 	double LastHeartbeatTime;
 	double LastMessageReceivedTime;
 	double ReconnectScheduledTime;
+	double ReconnectScheduledTime;
 
 	// Socket and networking
 	mutable FCriticalSection SocketMutex;
@@ -526,28 +436,8 @@ protected:
 	Horizon::Protocol::FWebSocketProtocol::FExtensionFlags ExtensionFlags;
 	TArray<FString> AcceptedExtensions;
 
-	// High-performance message queues
-	std::atomic<int32> PendingMessagesCount{0};
-	TQueue<TSharedPtr<Horizon::WebSocket::FHorizonMessage>> OutgoingHighPriorityMessages;
-	TQueue<TSharedPtr<Horizon::WebSocket::FHorizonMessage>> OutgoingMessages;
-	TQueue<TSharedPtr<Horizon::WebSocket::FHorizonMessage>> IncomingMessages;
-	TQueue<TArray<uint8>> IncomingData;
-	TQueue<TArray<uint8>> OutgoingBinaryMessages;
-	
-	// Batching support
-	TArray<TSharedPtr<Horizon::WebSocket::FHorizonMessage>> BatchedMessages;
-	double LastBatchSendTime;
-	FCriticalSection BatchMutex;
-	
 	// Frame buffer for WebSocket frame processing
 	TArray<uint8> FrameBuffer;
-
-	// Statistics
-	std::atomic<uint64> SentMessagesCount{0};
-	std::atomic<uint64> ReceivedMessagesCount{0};
-	std::atomic<uint64> SentBytesCount{0};
-	std::atomic<uint64> ReceivedBytesCount{0};
-	std::atomic<uint64> ErrorsCount{0};
 	
 	// Internal methods
 	void CleanupWebSocket();
@@ -561,15 +451,8 @@ protected:
 	bool SendHandshakeRequest();
 	bool ProcessHandshakeResponse(const FString& Response);
 	
-	// Batch processing
-	void ProcessOutgoingBatch(bool bForceFlush = false);
-	
-	// High-performance message handling
-	void ProcessReceivedMessage(TSharedPtr<Horizon::WebSocket::FHorizonMessage> Message);
+	// Simple message handling (SocketIOClient-style)
 	void ProcessReceivedFrame(bool bFinal, uint8 Opcode, const TArray<uint8>& Payload);
-	
-	// Worker task management
-	bool CreateWorkerTask(TFunction<void()> TaskFunction);
 	
 	// Event handlers
 	void OnWebSocketConnected();
