@@ -51,7 +51,7 @@ namespace Horizon
  * - Automatic reconnection (configurable)
  * - Heartbeat mechanism for connection health
  * - Blueprint and C++ API support
- * - Direct message sending (no complex batching)
+ * - Direct message sending for low latency
  * 
  * Usage Example:
  * @code
@@ -76,10 +76,10 @@ class HORIZON_API UHorizonWebSocketClient : public UObject, public FTickableGame
 	GENERATED_BODY()
 
 public:
-	/** Default constructor - initializes default values and thread-safe containers */
+	/** Default constructor - initializes default values and connection state */
 	UHorizonWebSocketClient();
 	
-	/** Destructor - ensures proper cleanup of threads and connections */
+	/** Destructor - ensures proper cleanup of connections */
 	virtual ~UHorizonWebSocketClient();
 	
 	/**
@@ -98,7 +98,7 @@ public:
 	
 	/**
 	 * Called when the object is being destroyed
-	 * Ensures proper cleanup of network connections and worker threads
+	 * Ensures proper cleanup of network connections
 	 */
 	virtual void BeginDestroy() override;
 	
@@ -130,7 +130,7 @@ public:
 
 	/**
 	 * Initializes the WebSocket client with current configuration
-	 * Sets up thread pool, message queues, and internal state
+	 * Sets up connection state and heartbeat settings
 	 * Must be called before attempting to connect
 	 */
 	void Initialize();
@@ -410,7 +410,7 @@ protected:
  * 
  * This WebSocket client uses a simple, direct approach for sending messages:
  * - Use SendMessage() for all message types (text/JSON)
- * - Messages are sent immediately (no complex batching)
+ * - Messages are sent immediately for low latency
  * - Plain text is automatically wrapped in JSON format for server compatibility
  * - For structured messages, use UHorizonUtility helper functions
  * 

@@ -25,10 +25,10 @@ public:
 	static UHorizonWebSocketClient* CreateWebSocket(const UObject* WorldContext);
 
 	/**
-	 * Get performance statistics for the Horizon WebSocket system
+	 * Get connection statistics for the Horizon WebSocket system
 	 * @param WorldContext World context for subsystem access
-	 * @param bIncludeDetailedStats Whether to include detailed statistics
-	 * @return Performance statistics as a string
+	 * @param bIncludeDetailedStats Whether to include detailed connection info
+	 * @return Connection statistics as a string
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket", meta = (WorldContext = "WorldContext"))
 	static FString GetPerformanceStatistics(const UObject* WorldContext, bool bIncludeDetailedStats = false);
@@ -114,7 +114,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Horizon|WebSocket|Utilities", meta = (DisplayName = "Generate Client ID"))
 	static FString GenerateClientID();
 
-	// High-Performance Utilities
+	// Message Creation Utilities
 
 	/**
 	 * Format bytes to human-readable string (KB, MB, etc.)

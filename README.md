@@ -164,9 +164,8 @@ graph LR
     
     subgraph "Status Monitoring"
         STAT[Get Connection State]
-        PERF[Get Performance Stats]
         
-        STAT --> PERF
+        STAT
     end
     
     subgraph "Event Handling"
@@ -216,7 +215,7 @@ graph TD
 2. **Configure the component:**
    - Set `Auto Connect` to `true`
    - Set `Auto Connect URL` to your server (e.g., `ws://localhost:8080`)
-   - Configure performance settings as needed
+   - Configure connection and heartbeat settings as needed
 
 3. **Handle WebSocket events:**
    ```
@@ -302,19 +301,13 @@ graph TD
    
    // Create and configure WebSocket
    UHorizonWebSocketClient* WebSocket = HorizonSubsystem->CreateWebSocket();
-   WebSocket->SetBatchSize(1000);
-   WebSocket->SetMaxPendingMessages(10000);
    
    // Connect with custom protocol
    WebSocket->Connect(TEXT("ws://localhost:8080"), TEXT("my-custom-protocol"));
    ```
 
-2. **Performance monitoring:**
+2. **Connection monitoring:**
    ```cpp
-   // Get performance metrics
-   FString PerformanceStats = WebSocket->GetPerformanceStats(true);
-   UE_LOG(LogTemp, Log, TEXT("WebSocket Performance: %s"), *PerformanceStats);
-   
    // Check connection state
    EHorizonWebSocketState State = WebSocket->GetConnectionState();
    bool bIsConnected = WebSocket->IsConnected();

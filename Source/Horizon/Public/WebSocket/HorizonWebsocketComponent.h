@@ -31,7 +31,7 @@ enum class EHorizonWebSocketState : uint8;
  * - Auto-connection on BeginPlay with configurable delay
  * - Complete Blueprint integration with event delegates
  * - Automatic cleanup on component destruction
- * - Performance settings for optimized operation
+ * - Connection and heartbeat settings for reliable operation
  * - Direct access to underlying WebSocket client for advanced use
  * 
  * Usage in Blueprint:
@@ -64,7 +64,7 @@ class HORIZON_API UHorizonWebSocketComponent : public UActorComponent
 public:
 	/**
 	 * Default constructor
-	 * Initializes the component with default settings optimized for single-client use
+	 * Initializes the component with default settings optimized for simple WebSocket use
 	 */
 	UHorizonWebSocketComponent();
 

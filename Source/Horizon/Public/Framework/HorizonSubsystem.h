@@ -43,7 +43,7 @@ enum class EHorizonWebSocketState : uint8;
  * Client->Connect("ws://localhost:8080", "my-protocol");
  * 
  * // Send messages
-* Client->SendMessage(UHorizonUtility::MakeChatMessage("Player1", "Hello!", "general"));
+ * Client->SendMessage(UHorizonUtility::MakeChatMessage("Player1", "Hello!", "general"));
  * @endcode
  * 
  * @see UHorizonWebSocketClient for detailed client functionality

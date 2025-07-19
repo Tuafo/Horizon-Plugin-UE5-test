@@ -148,7 +148,7 @@ bool UHorizonWebSocketClient::Connect(const FString& URL, const FString& Protoco
     bShouldShutdown = false;
     bCleaningUp = false;
     
-    // Make sure thread pool is initialized
+    // Make sure client is initialized
     Initialize();
 
     ServerURL = URL;
