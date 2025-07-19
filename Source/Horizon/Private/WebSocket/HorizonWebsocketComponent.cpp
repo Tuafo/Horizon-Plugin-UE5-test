@@ -198,44 +198,38 @@ bool UHorizonWebSocketComponent::GetVerboseLogging() const
 
 void UHorizonWebSocketComponent::SetBatchSize(int32 Size)
 {
-	BatchSize = FMath::Clamp(Size, 100, 10000);
-	if (WebSocket)
-	{
-		WebSocket->BatchSize = BatchSize;
-	}
+	// Batching has been simplified - setting ignored
+	UE_LOG(LogHorizon, Log, TEXT("Batch size setting ignored - using simplified architecture"));
 }
 
 void UHorizonWebSocketComponent::SetThreadPoolSize(int32 Size)
 {
-	ThreadPoolSize = FMath::Clamp(Size, 0, 32);
-	if (WebSocket)
-	{
-		WebSocket->ThreadPoolSize = ThreadPoolSize;
-	}
+	// Thread pool has been simplified - setting ignored
+	UE_LOG(LogHorizon, Log, TEXT("Thread pool size setting ignored - using simplified architecture"));
 }
 
 void UHorizonWebSocketComponent::SetMaxPendingMessages(int32 Count)
 {
-	MaxPendingMessages = FMath::Clamp(Count, 1000, 1000000);
-	if (WebSocket)
-	{
-		WebSocket->MaxPendingMessages = MaxPendingMessages;
-	}
+	// Message queuing has been simplified - setting ignored
+	UE_LOG(LogHorizon, Log, TEXT("Max pending messages setting ignored - using simplified architecture"));
 }
 
 int32 UHorizonWebSocketComponent::GetBatchSize() const
 {
-	return WebSocket ? WebSocket->BatchSize : BatchSize;
+	// Batching simplified - return default value
+	return 1000;
 }
 
 int32 UHorizonWebSocketComponent::GetThreadPoolSize() const
 {
-	return WebSocket ? WebSocket->ThreadPoolSize : ThreadPoolSize;
+	// Thread pool simplified - return default value
+	return 4;
 }
 
 int32 UHorizonWebSocketComponent::GetMaxPendingMessages() const
 {
-	return WebSocket ? WebSocket->MaxPendingMessages : MaxPendingMessages;
+	// Message queuing simplified - return default value
+	return 10000;
 }
 
 FString UHorizonWebSocketComponent::GetPerformanceStats(bool bIncludeDetailedStats) const
@@ -272,12 +266,8 @@ void UHorizonWebSocketComponent::ApplyPerformanceSettings()
 {
 	if (WebSocket)
 	{
-		// Apply performance configuration (always optimized)
-		WebSocket->BatchSize = BatchSize;
-		WebSocket->ThreadPoolSize = ThreadPoolSize;
-		WebSocket->MaxPendingMessages = MaxPendingMessages;
-		
-		// Initialize the client with these settings
+		// Performance settings simplified - no configuration needed
+		// Initialize the client with default settings
 		WebSocket->Initialize();
 	}
 }

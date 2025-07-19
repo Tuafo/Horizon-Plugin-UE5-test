@@ -76,24 +76,14 @@ FString UHorizonSubsystem::GetHorizonStatus() const
 
 void UHorizonSubsystem::SetGlobalThreadPoolSize(int32 ThreadPoolSize)
 {
-	// Apply to existing client
-	if (ManagedClient)
-	{
-		ManagedClient->ThreadPoolSize = FMath::Clamp(ThreadPoolSize, 0, 32);
-	}
-	
-	UE_LOG(LogHorizon, Log, TEXT("Horizon thread pool size set to %d"), ThreadPoolSize);
+	// Thread pool functionality has been simplified - no longer configurable
+	UE_LOG(LogHorizon, Log, TEXT("Thread pool size setting ignored - using simplified architecture"));
 }
 
 void UHorizonSubsystem::SetGlobalMaxPendingMessages(int32 MaxMessages)
 {
-	// Apply to existing client
-	if (ManagedClient)
-	{
-		ManagedClient->MaxPendingMessages = FMath::Clamp(MaxMessages, 1000, 1000000);
-	}
-	
-	UE_LOG(LogHorizon, Log, TEXT("Horizon max pending messages set to %d"), MaxMessages);
+	// Message batching has been simplified - no longer configurable
+	UE_LOG(LogHorizon, Log, TEXT("Max pending messages setting ignored - using simplified architecture"));
 }
 
 FString UHorizonSubsystem::GetGlobalPerformanceStats(bool bIncludeDetailedStats) const

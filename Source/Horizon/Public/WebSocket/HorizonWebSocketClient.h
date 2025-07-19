@@ -419,7 +419,6 @@ protected:
 	double LastHeartbeatTime;
 	double LastMessageReceivedTime;
 	double ReconnectScheduledTime;
-	double ReconnectScheduledTime;
 
 	// Socket and networking
 	mutable FCriticalSection SocketMutex;
@@ -453,6 +452,7 @@ protected:
 	
 	// Simple message handling (SocketIOClient-style)
 	void ProcessReceivedFrame(bool bFinal, uint8 Opcode, const TArray<uint8>& Payload);
+	void ProcessReceivedMessage(TSharedPtr<Horizon::WebSocket::FHorizonMessage> Message);
 	
 	// Event handlers
 	void OnWebSocketConnected();

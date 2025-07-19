@@ -771,9 +771,6 @@ bool UHorizonWebSocketClient::ReceiveSocketData(TArray<uint8>& OutData)
         OutData.SetNum(BytesRead);
     }
     
-    // Track received data
-    ReceivedBytesCount += BytesRead;
-    
     return true;
 }
 
@@ -783,10 +780,6 @@ void UHorizonWebSocketClient::ProcessReceivedMessage(TSharedPtr<Horizon::WebSock
     {
         return;
     }
-
-    // Track statistics
-    ReceivedMessagesCount++;
-    ReceivedBytesCount += Message->GetSize();
 
     // Handle different message types
     switch (Message->GetType())

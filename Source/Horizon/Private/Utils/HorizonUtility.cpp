@@ -406,4 +406,3 @@ UHorizonSubsystem* UHorizonUtility::GetHorizonSubsystem(const UObject* WorldCont
 
 	return GameInstance->GetSubsystem<UHorizonSubsystem>();
 }
-}
