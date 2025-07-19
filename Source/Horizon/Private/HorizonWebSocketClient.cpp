@@ -13,6 +13,7 @@
 #include "SocketSubsystem.h"
 #include "IPAddress.h"
 #include "Interfaces/IPv4/IPv4Address.h"
+#include <atomic>
 
 // WebSocket magic string for handshake
 static const FString WebSocketMagicString = TEXT("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
@@ -25,6 +26,7 @@ UHorizonWebSocketClient::UHorizonWebSocketClient()
 	, LastHeartbeatTime(0.0)
 	, LastMessageReceivedTime(0.0)
 	, ReconnectScheduledTime(0.0)
+	, ConnectionStartTime(0.0)
 	, Socket(nullptr)
 	, ServerPort(0)
 	, bIsSecureConnection(false)
@@ -56,10 +58,32 @@ UWorld* UHorizonWebSocketClient::GetWorld() const
 
 void UHorizonWebSocketClient::Tick(float DeltaTime)
 {
+	double CurrentTime = FPlatformTime::Seconds();
+	
+	// Handle connection timeout during handshake
+	if (ConnectionState == EHorizonWebSocketState::Connecting && ConnectionStartTime > 0.0)
+	{
+		if (CurrentTime - ConnectionStartTime > ConnectionTimeoutSeconds)
+		{
+			LogMessage(FString::Printf(TEXT("Connection timeout after %.1f seconds"), ConnectionTimeoutSeconds), true);
+			
+			if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
+			{
+				HandleReconnection();
+			}
+			else
+			{
+				SetConnectionState(EHorizonWebSocketState::Failed);
+				CleanupWebSocket();
+			}
+			return;
+		}
+	}
+
 	// Handle scheduled reconnection
 	if (bIsReconnecting && ReconnectScheduledTime > 0.0)
 	{
-		if (FPlatformTime::Seconds() >= ReconnectScheduledTime)
+		if (CurrentTime >= ReconnectScheduledTime)
 		{
 			ReconnectScheduledTime = 0.0;
 			bIsReconnecting = false;
@@ -75,7 +99,6 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
 	// Check for connection timeout if heartbeat is enabled
 	if (bEnableHeartbeat && IsConnected())
 	{
-		double CurrentTime = FPlatformTime::Seconds();
 		double TimeSinceLastMessage = CurrentTime - LastMessageReceivedTime;
 		double TimeoutThreshold = HeartbeatIntervalSeconds * 3.0; // 3x heartbeat interval
 
@@ -85,7 +108,7 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
 
 			if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
 			{
-				ForceReconnect();
+				HandleReconnection();
 			}
 			else
 			{
@@ -138,6 +161,7 @@ bool UHorizonWebSocketClient::Connect(const FString& URL, const FString& Protoco
 	}
 
 	SetConnectionState(EHorizonWebSocketState::Connecting);
+	ConnectionStartTime = FPlatformTime::Seconds();
 	LogMessage(FString::Printf(TEXT("Connecting to %s:%d%s (Secure: %s, Protocol: %s)"),
 		*ServerHost, ServerPort, *ServerPath, bIsSecureConnection ? TEXT("Yes") : TEXT("No"), *Protocol));
 
@@ -216,6 +240,9 @@ void UHorizonWebSocketClient::ForceReconnect()
 	// Clean up current connection
 	CleanupWebSocket();
 
+	// Reset reconnection attempts for manual reconnect
+	CurrentReconnectAttempts = 0;
+
 	// Schedule reconnection
 	HandleReconnection();
 }
@@ -248,7 +275,7 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 {
 	bShouldShutdown = true;
 
-	// Stop worker thread
+	// Stop worker thread first
 	if (WebSocketWorker.IsValid())
 	{
 		WebSocketWorker->StopConnection();
@@ -256,6 +283,7 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 
 	if (WorkerThread)
 	{
+		// Wait for thread to complete with timeout
 		WorkerThread->WaitForCompletion();
 		delete WorkerThread;
 		WorkerThread = nullptr;
@@ -263,7 +291,7 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 
 	WebSocketWorker.Reset();
 
-	// Clean up socket
+	// Clean up socket safely
 	{
 		FScopeLock Lock(&SocketMutex);
 		if (Socket)
@@ -294,10 +322,23 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 	}
 
 	FrameBuffer.Empty();
-	SetConnectionState(EHorizonWebSocketState::Disconnected);
-	CurrentReconnectAttempts = 0;
-	bIsReconnecting = false;
-	ReconnectScheduledTime = 0.0;
+	
+	// Reset connection state
+	if (ConnectionState != EHorizonWebSocketState::Disconnected && !bIsReconnecting)
+	{
+		SetConnectionState(EHorizonWebSocketState::Disconnected);
+	}
+	
+	ConnectionStartTime = 0.0;
+	
+	// Reset shutdown flag if we're not actually shutting down permanently
+	if (!bIsReconnecting)
+	{
+		bShouldShutdown = false;
+		CurrentReconnectAttempts = 0;
+		ReconnectScheduledTime = 0.0;
+	}
+}
 }
 
 void UHorizonWebSocketClient::SetConnectionState(EHorizonWebSocketState NewState)
@@ -894,6 +935,7 @@ uint32 FHorizonWebSocketWorker::Run()
 				// Connection failed
 				Client->OnWebSocketConnectionError(TEXT("Handshake failed"));
 				bIsConnecting = false;
+				break; // Exit worker thread on handshake failure
 			}
 		}
 		else

@@ -107,10 +107,13 @@ public:
 	bool bAutoReconnect = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
-	int32 MaxReconnectAttempts = 5;
+	int32 MaxReconnectAttempts = 3;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
 	float ReconnectDelaySeconds = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
+	float ConnectionTimeoutSeconds = 10.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
 	bool bEnableHeartbeat = true;
@@ -124,21 +127,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
 	bool bVerboseLogging = false;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WebSocket|Config")
-	bool bImmediateProcessing = false;
-	
 protected:
 	// Internal connection state
 	mutable FCriticalSection StateMutex;
 	EHorizonWebSocketState ConnectionState;
 
-	// Reconnection handling
+	// Connection management
 	int32 CurrentReconnectAttempts;
 	FThreadSafeBool bShouldShutdown;
-	bool bIsReconnecting;
+	std::atomic<bool> bIsReconnecting{false};
 	double LastHeartbeatTime;
 	double LastMessageReceivedTime;
 	double ReconnectScheduledTime;
+	double ConnectionStartTime;
 
 	// Socket and networking
 	mutable FCriticalSection SocketMutex;
@@ -186,11 +187,6 @@ protected:
 	virtual void OnWebSocketRawMessage(const TArray<uint8>& Data);
 	virtual void OnWebSocketMessageSent(const FString& Message);
 
-	// Immediate processing methods
-	bool SendMessageImmediate(const FString& Message);
-	bool SendBinaryMessageImmediate(const TArray<uint8>& Data);
-	void ProcessIncomingDataImmediate(const TArray<uint8>& Data);
-
 	friend class FHorizonWebSocketWorker;
 };
 
@@ -213,7 +209,7 @@ public:
 protected:
 	UHorizonWebSocketClient* Client;
 	FThreadSafeBool bStopRequested;
-	bool bIsConnecting;
+	std::atomic<bool> bIsConnecting{false};
 
 	// Connection parameters
 	FString ConnectHost;
@@ -228,11 +224,4 @@ protected:
 	bool ReceiveData(TArray<uint8>& OutData);
 	virtual void HandleIncomingMessages();
 	virtual void HandleOutgoingMessages();
-
-	// Immediate processing support
-	void ProcessIncomingMessageImmediate(const TArray<uint8>& Data);
-	bool SendMessageDataImmediate(const TArray<uint8>& FrameData);
-
-private:
-	std::atomic<bool> bProcessingMessage{false};
 };
