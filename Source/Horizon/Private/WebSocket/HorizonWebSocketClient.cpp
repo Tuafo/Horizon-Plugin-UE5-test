@@ -25,10 +25,8 @@ UHorizonWebSocketClient::UHorizonWebSocketClient()
       , CurrentReconnectAttempts(0)
       , bShouldShutdown(false)
       , bCleaningUp(false)
-      , bIsReconnecting(false)
       , LastHeartbeatTime(0.0)
       , LastMessageReceivedTime(0.0)
-      , ReconnectScheduledTime(0.0)
       , Socket(nullptr)
       , ServerPort(0)
       , bIsSecureConnection(false)
@@ -88,20 +86,7 @@ UWorld* UHorizonWebSocketClient::GetWorld() const
 
 void UHorizonWebSocketClient::Tick(float DeltaTime)
 {
-    // Handle scheduled reconnection (simplified approach)
-    if (bIsReconnecting && ReconnectScheduledTime > 0.0)
-    {
-        if (FPlatformTime::Seconds() >= ReconnectScheduledTime)
-        {
-            ReconnectScheduledTime = 0.0;
-            bIsReconnecting = false;
-
-            LogMessage(FString::Printf(TEXT("Attempting reconnection %d/%d"), CurrentReconnectAttempts + 1, MaxReconnectAttempts));
-            Connect(ServerURL, ServerProtocol);
-        }
-    }
-
-    // Check for connection timeout if heartbeat is enabled
+    // Simple heartbeat check (removed complex reconnection scheduling)
     if (bEnableHeartbeat && IsConnected())
     {
         double CurrentTime = FPlatformTime::Seconds();
@@ -111,10 +96,13 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
         if (TimeSinceLastMessage > TimeoutThreshold)
         {
             LogMessage(FString::Printf(TEXT("Connection timeout detected (%.1fs since last message)"), TimeSinceLastMessage), true);
-
+            // Simple reconnection - just try again immediately if enabled
             if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
             {
-                ForceReconnect();
+                CurrentReconnectAttempts++;
+                LogMessage(FString::Printf(TEXT("Auto-reconnecting (attempt %d/%d)"), CurrentReconnectAttempts, MaxReconnectAttempts));
+                CleanupWebSocket();
+                Connect(ServerURL, ServerProtocol);
             }
             else
             {
@@ -126,6 +114,7 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
         else if (CurrentTime - LastHeartbeatTime >= HeartbeatIntervalSeconds)
         {
             SendHeartbeat();
+            LastHeartbeatTime = CurrentTime;
         }
     }
 }
@@ -369,12 +358,8 @@ void UHorizonWebSocketClient::ForceReconnect()
         return;
     }
 
-    LogMessage(TEXT("Force reconnecting..."));
-
-    // Clean up current connection
-    CleanupWebSocket();
-
-    // Schedule reconnection
+    LogMessage(TEXT("Force reconnecting (simplified)..."));
+    // Simple immediate reconnection
     HandleReconnection();
 }
 
@@ -461,8 +446,6 @@ void UHorizonWebSocketClient::CleanupWebSocket()
     
     SetConnectionState(EHorizonWebSocketState::Disconnected);
     CurrentReconnectAttempts = 0;
-    bIsReconnecting = false;
-    ReconnectScheduledTime = 0.0;
     
     bCleaningUp = false;
 }
@@ -482,6 +465,7 @@ void UHorizonWebSocketClient::SetConnectionState(EHorizonWebSocketState NewState
 
 void UHorizonWebSocketClient::HandleReconnection()
 {
+    // Simplified reconnection - just attempt immediate reconnect (SocketIOClient style)
     if (bShouldShutdown || !bAutoReconnect)
     {
         return;
@@ -495,17 +479,11 @@ void UHorizonWebSocketClient::HandleReconnection()
     }
 
     CurrentReconnectAttempts++;
-    bIsReconnecting = true;
-    SetConnectionState(EHorizonWebSocketState::Reconnecting);
-
-    // Schedule reconnection with exponential backoff
-    float DelayMultiplier = FMath::Pow(2.0f, CurrentReconnectAttempts - 1);
-    float ActualDelay = FMath::Min(ReconnectDelaySeconds * DelayMultiplier, 60.0f); // Cap at 60 seconds
-
-    ReconnectScheduledTime = FPlatformTime::Seconds() + ActualDelay;
-
-    LogMessage(FString::Printf(TEXT("Reconnection scheduled in %.1f seconds (Attempt %d/%d)"),
-        ActualDelay, CurrentReconnectAttempts, MaxReconnectAttempts));
+    LogMessage(FString::Printf(TEXT("Attempting simple reconnection (attempt %d/%d)"), CurrentReconnectAttempts, MaxReconnectAttempts));
+    
+    // Simple immediate reconnection - no complex scheduling or backoff
+    CleanupWebSocket();
+    Connect(ServerURL, ServerProtocol);
 }
 
 void UHorizonWebSocketClient::LogMessage(const FString& Message, bool bIsError) const
@@ -598,7 +576,6 @@ void UHorizonWebSocketClient::OnWebSocketConnected()
     SetConnectionState(EHorizonWebSocketState::Connected);
     bConnectionEstablished = true;
     CurrentReconnectAttempts = 0;
-    bIsReconnecting = false;
     LastMessageReceivedTime = FPlatformTime::Seconds();
 
     // Broadcast delegate on game thread
@@ -1004,7 +981,6 @@ bool UHorizonWebSocketClient::ProcessHandshakeResponse(const FString& Response)
     
     // Reset reconnect attempts
     CurrentReconnectAttempts = 0;
-    bIsReconnecting = false;
     LastMessageReceivedTime = FPlatformTime::Seconds();
     
     // Track connection

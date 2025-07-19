@@ -411,14 +411,12 @@ protected:
 	EHorizonWebSocketState ConnectionState;
 	FThreadSafeBool bConnectionEstablished;
 
-	// Reconnection handling
+	// Reconnection handling (simplified)
 	int32 CurrentReconnectAttempts;
 	FThreadSafeBool bShouldShutdown;
 	FThreadSafeBool bCleaningUp;
-	bool bIsReconnecting;
 	double LastHeartbeatTime;
 	double LastMessageReceivedTime;
-	double ReconnectScheduledTime;
 
 	// Socket and networking
 	mutable FCriticalSection SocketMutex;
