@@ -61,7 +61,6 @@ void UHorizonSettings::ValidateSettings()
 	InitialMessagePoolSize = FMath::Clamp(InitialMessagePoolSize, 50, 5000);
 	DefaultBatchSize = FMath::Clamp(DefaultBatchSize, 100, 10000);
 	MaxBatchDelay = FMath::Clamp(MaxBatchDelay, 0.001f, 0.5f);
-	PerformanceMonitoringInterval = FMath::Clamp(PerformanceMonitoringInterval, 0.05f, 2.0f);
 
 	// Validate heartbeat message
 	if (DefaultHeartbeatMessage.IsEmpty())

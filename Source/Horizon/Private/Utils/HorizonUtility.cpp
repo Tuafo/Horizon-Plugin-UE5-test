@@ -11,7 +11,6 @@
 #include "Misc/Paths.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
-#include "WebSocket/HorizonPerformanceMonitor.h"
 
 bool UHorizonUtility::ParseWebSocketURL(const FString& URL, FString& OutProtocol, FString& OutHost, int32& OutPort, FString& OutPath)
 {
@@ -354,13 +353,7 @@ UHorizonWebSocketClient* UHorizonUtility::CreateWebSocket(const UObject* WorldCo
 
 FString UHorizonUtility::GetPerformanceStatistics(const UObject* WorldContext, bool bIncludeDetailedStats)
 {
-	auto PerformanceMonitor = Horizon::WebSocket::FHorizonPerformanceMonitor::Get();
-	if (PerformanceMonitor.IsValid())
-	{
-		return PerformanceMonitor->GetStatsAsString(bIncludeDetailedStats);
-	}
-
-	return TEXT("Performance monitor not available");
+	return TEXT("Performance monitoring has been removed");
 }
 
 FString UHorizonUtility::GetHorizonVersion()
@@ -380,7 +373,7 @@ bool UHorizonUtility::IsHorizonFeatureAvailable(const FString& FeatureName)
 	}
 	else if (FeatureName.Equals(TEXT("PerformanceMonitoring"), ESearchCase::IgnoreCase))
 	{
-		return true;
+		return false;
 	}
 	else if (FeatureName.Equals(TEXT("BatchSending"), ESearchCase::IgnoreCase))
 	{

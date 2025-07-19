@@ -211,18 +211,6 @@ public:
 	/** @} */
 
 	/**
-	 * @name Performance Settings - Monitoring
-	 * Configure performance monitoring and statistics
-	 * @{
-	 */
-
-	/** How often to update performance monitoring statistics */
-	UPROPERTY(Config, EditAnywhere, Category = "Performance|Monitoring", meta = (DisplayName = "Monitoring Update Interval", ClampMin = "0.05", ClampMax = "2.0", Units = "s", ToolTip = "How often to update performance monitoring statistics"))
-	float PerformanceMonitoringInterval = 0.1f;
-
-	/** @} */
-
-	/**
 	 * @name Performance Settings - General
 	 * General performance and resource management settings
 	 * @{

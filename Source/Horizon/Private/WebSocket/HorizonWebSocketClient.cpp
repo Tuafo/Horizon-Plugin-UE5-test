@@ -3,7 +3,6 @@
 #include "Protocol/HorizonWebSocketProtocol.h"
 #include "Threading/HorizonThreadPool.h"
 #include "WebSocket/HorizonMessage.h"
-#include "WebSocket/HorizonPerformanceMonitor.h"
 #include "Core/Horizon.h"
 #include "Utils/HorizonUtility.h"
 #include "Engine/World.h"
@@ -84,19 +83,6 @@ void UHorizonWebSocketClient::Initialize()
     if (BatchedMessages.Max() < BatchSize)
     {
         BatchedMessages.Reserve(BatchSize);
-    }
-    
-    // Initialize performance monitoring
-    try
-    {
-        if (auto Monitor = Horizon::WebSocket::FHorizonPerformanceMonitor::Get())
-        {
-            Monitor->Initialize(ThreadPoolSize);
-        }
-    }
-    catch (...)
-    {
-        UE_LOG(LogHorizon, Warning, TEXT("Failed to initialize performance monitoring"));
     }
     
     UE_LOG(LogHorizon, Log, TEXT("HorizonWebSocketClient initialized - ThreadPool: %d threads, Batch size: %d"),
@@ -289,12 +275,6 @@ void UHorizonWebSocketClient::Tick(float DeltaTime)
 
     // Force flush batched messages (batching is always enabled)
     ProcessOutgoingBatch(false);
-    
-    // Update performance monitoring (always enabled)
-    if (auto Monitor = Horizon::WebSocket::FHorizonPerformanceMonitor::Get())
-    {
-        Monitor->Update(DeltaTime);
-    }
 }
 
 TStatId UHorizonWebSocketClient::GetStatId() const
@@ -457,7 +437,6 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
     if (!IsConnected())
     {
         LogMessage(TEXT("Cannot send message: not connected"), true);
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
         return false;
     }
     
@@ -465,7 +444,6 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
     if (PendingMessagesCount >= MaxPendingMessages)
     {
         LogMessage(FString::Printf(TEXT("Message queue full (%d messages pending)"), static_cast<int32>(PendingMessagesCount.load())), true);
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
         return false;
     }
     
@@ -488,7 +466,6 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
     TSharedPtr<Horizon::WebSocket::FHorizonMessage> MessageObj = Horizon::WebSocket::FHorizonMessage::CreateTextMessage(MessageToSend);
     
     // Track statistics
-    Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackMessageSent(MessageObj->GetSize());
     SentMessagesCount++;
     SentBytesCount += MessageObj->GetSize();
     
@@ -530,7 +507,6 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
     if (!IsConnected())
     {
         LogMessage(TEXT("Cannot send binary message: not connected"), true);
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
         return false;
     }
     
@@ -538,7 +514,6 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
     if (PendingMessagesCount >= MaxPendingMessages)
     {
         LogMessage(FString::Printf(TEXT("Message queue full (%d messages pending)"), static_cast<int32>(PendingMessagesCount.load())), true);
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
         return false;
     }
     
@@ -546,7 +521,6 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
     TSharedPtr<Horizon::WebSocket::FHorizonMessage> MessageObj = Horizon::WebSocket::FHorizonMessage::CreateBinaryMessage(Data);
     
     // Track statistics
-    Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackMessageSent(MessageObj->GetSize());
     SentMessagesCount++;
     SentBytesCount += MessageObj->GetSize();
     
@@ -715,19 +689,7 @@ void UHorizonWebSocketClient::CleanupWebSocket()
     PendingMessagesCount = 0;
     FrameBuffer.Empty();
     
-    // Log final stats safely (performance monitoring always enabled)
-    try
-    {
-        if (auto Monitor = Horizon::WebSocket::FHorizonPerformanceMonitor::Get())
-        {
-            UE_LOG(LogHorizon, Log, TEXT("WebSocket cleanup - Final stats: %s"), 
-                *Monitor->GetStatsAsString(true));
-        }
-    }
-    catch (...)
-    {
-        UE_LOG(LogHorizon, Warning, TEXT("Exception during performance stats logging"));
-    }
+    UE_LOG(LogHorizon, Log, TEXT("WebSocket cleanup complete"));
     
     SetConnectionState(EHorizonWebSocketState::Disconnected);
     CurrentReconnectAttempts = 0;
@@ -994,7 +956,6 @@ bool UHorizonWebSocketClient::SendSocketData(const TArray<uint8>& Data)
     if (!bSuccess || BytesSent != Data.Num())
     {
         LogMessage(FString::Printf(TEXT("Failed to send data: %d of %d bytes sent"), BytesSent, Data.Num()), true);
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
         return false;
     }
     
@@ -1033,7 +994,6 @@ bool UHorizonWebSocketClient::ReceiveSocketData(TArray<uint8>& OutData)
     {
         OutData.Empty();
         LogMessage(TEXT("Failed to receive data from socket"), true);
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
             return false;
         }
 
@@ -1176,10 +1136,8 @@ FString UHorizonWebSocketClient::GetPerformanceStats(bool bIncludeDetailedStats)
 {
     if (ThreadPool.IsValid())
     {
-        Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackPendingTasks(ThreadPool->GetPendingTaskCount());
     }
     
-    return Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->GetStatsAsString(bIncludeDetailedStats);
 }
 
 void UHorizonWebSocketClient::ProcessOutgoingBatch(bool bForceFlush)
@@ -1361,7 +1319,6 @@ bool UHorizonWebSocketClient::ProcessHandshakeResponse(const FString& Response)
     LastMessageReceivedTime = FPlatformTime::Seconds();
     
     // Track connection
-    Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackConnection();
     
     // Call connected callback on game thread
     AsyncTask(ENamedThreads::GameThread, [this]() {
@@ -1420,7 +1377,6 @@ bool UHorizonWebSocketClient::CreateWorkerTask(TFunction<void()> TaskFunction)
             if (!bShouldShutdown && IsValid(this))
             {
                 UE_LOG(LogHorizon, Error, TEXT("Exception in worker task: %s"), UTF8_TO_TCHAR(e.what()));
-                Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
             }
         }
         catch (...)
@@ -1428,7 +1384,6 @@ bool UHorizonWebSocketClient::CreateWorkerTask(TFunction<void()> TaskFunction)
             if (!bShouldShutdown && IsValid(this))
             {
                 UE_LOG(LogHorizon, Error, TEXT("Unknown exception in worker task"));
-                Horizon::WebSocket::FHorizonPerformanceMonitor::Get()->TrackError();
             }
         }
         
