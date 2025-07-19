@@ -86,12 +86,6 @@ public:
 	 */
 	bool IsHighPerformanceAvailable() const { return bHighPerformanceInitialized; }
 
-	/**
-	 * Checks if the thread pool is available and initialized
-	 * @return True if thread pool is ready for use
-	 */
-	bool IsThreadPoolAvailable() const { return bThreadPoolInitialized; }
-
 private:
 	/**
 	 * @name Subsystem Initialization Functions
@@ -108,11 +102,6 @@ private:
 	void InitializeHighPerformance();
 	/** Shutdown high-performance messaging features */
 	void ShutdownHighPerformance();
-	
-	/** Initialize thread pool for async operations */
-	void InitializeThreadPool();
-	/** Shutdown thread pool and wait for completion */
-	void ShutdownThreadPool();
 
 	/** @} */
 
@@ -126,8 +115,6 @@ private:
 	bool bWebSocketInitialized = false;
 	/** True if high-performance features are initialized and ready */
 	bool bHighPerformanceInitialized = false;
-	/** True if thread pool is initialized and ready */
-	bool bThreadPoolInitialized = false;
 
 	/** @} */
 };

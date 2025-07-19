@@ -1,5 +1,4 @@
 #include "Core/Horizon.h"
-#include "Threading/HorizonThreadPool.h"
 #include "Config/HorizonSettings.h"
 
 #if PLATFORM_WINDOWS
@@ -18,10 +17,8 @@ void FHorizonModule::StartupModule()
 	UE_LOG(LogHorizon, Log, TEXT("Horizon Module v%s starting up"), *GetVersion());
 	
 	bWebSocketInitialized = false;
-	bThreadPoolInitialized = false;
 	
 	// Initialize subsystems in order
-	InitializeThreadPool();
 	InitializeWebSocket();
 	
 	UE_LOG(LogHorizon, Log, TEXT("Horizon Module initialized successfully"));
@@ -33,7 +30,6 @@ void FHorizonModule::ShutdownModule()
 	
 	// Shutdown in reverse order
 	ShutdownWebSocket();
-	ShutdownThreadPool();
 	
 	UE_LOG(LogHorizon, Log, TEXT("Horizon Module shutdown complete"));
 }
@@ -65,44 +61,6 @@ void FHorizonModule::ShutdownWebSocket()
 #endif
 		bWebSocketInitialized = false;
 		UE_LOG(LogHorizon, Log, TEXT("Horizon WebSocket system shutdown"));
-	}
-}
-
-void FHorizonModule::InitializeThreadPool()
-{
-	// Get thread pool size from settings
-	int32 ThreadPoolSize = 0;
-	if (const UHorizonSettings* Settings = GetDefault<UHorizonSettings>())
-	{
-		ThreadPoolSize = Settings->ThreadPoolSize;
-	}
-	
-	// Initialize thread pool
-	auto ThreadPoolInstance = Horizon::Threading::FThreadPool::Get();
-	if (ThreadPoolInstance.IsValid())
-	{
-		bThreadPoolInitialized = true;
-		UE_LOG(LogHorizon, Log, TEXT("Horizon thread pool initialized with %d threads"), 
-			ThreadPoolInstance->GetThreadCount());
-	}
-	else
-	{
-		UE_LOG(LogHorizon, Warning, TEXT("Failed to initialize Horizon thread pool"));
-	}
-}
-
-void FHorizonModule::ShutdownThreadPool()
-{
-	if (bThreadPoolInitialized)
-	{
-		// Shutdown thread pool
-		auto ThreadPoolInstance = Horizon::Threading::FThreadPool::Get();
-		if (ThreadPoolInstance.IsValid())
-		{
-			ThreadPoolInstance->Shutdown();
-		}
-		bThreadPoolInitialized = false;
-		UE_LOG(LogHorizon, Log, TEXT("Horizon thread pool shutdown"));
 	}
 }
 

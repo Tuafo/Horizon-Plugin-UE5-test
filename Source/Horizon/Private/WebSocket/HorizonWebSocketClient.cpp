@@ -1,7 +1,6 @@
 #include "WebSocket/HorizonWebSocketClient.h"
 #include "WebSocket/HorizonWebSocketComponent.h"
 #include "Protocol/HorizonWebSocketProtocol.h"
-#include "Threading/HorizonThreadPool.h"
 #include "WebSocket/HorizonMessage.h"
 #include "Core/Horizon.h"
 #include "Utils/HorizonUtility.h"
@@ -46,10 +45,7 @@ UHorizonWebSocketClient::UHorizonWebSocketClient()
     
     // Set optimized defaults for message limits
     MaxPendingMessages = 50000;           // Optimized default
-    BatchSize = 500;                      // Optimized default
-    
-    // Configure thread pool for maximum performance
-    ThreadPoolSize = FMath::Max(2, FPlatformMisc::NumberOfCores() - 1);
+}
 }
 
 UHorizonWebSocketClient::~UHorizonWebSocketClient()
@@ -70,23 +66,10 @@ void UHorizonWebSocketClient::Initialize()
         return;
     }
 
-    // Create thread pool for async operations if not already created
-    if (!ThreadPool.IsValid())
-    {
-        ThreadPool = Horizon::Threading::FThreadPool::Get();
-    }
-    
     // Initialize extensions flags
     ExtensionFlags = Horizon::Protocol::FWebSocketProtocol::FExtensionFlags();
     
-    // Initialize batched messages array
-    if (BatchedMessages.Max() < BatchSize)
-    {
-        BatchedMessages.Reserve(BatchSize);
-    }
-    
-    UE_LOG(LogHorizon, Log, TEXT("HorizonWebSocketClient initialized - ThreadPool: %d threads, Batch size: %d"),
-        ThreadPoolSize, BatchSize);
+    UE_LOG(LogHorizon, Log, TEXT("HorizonWebSocketClient initialized (simplified)"));
 }
 
 void UHorizonWebSocketClient::BeginDestroy()
@@ -98,32 +81,6 @@ void UHorizonWebSocketClient::BeginDestroy()
     if (!bCleaningUp)
     {
         CleanupWebSocket();
-    }
-    
-    // Wait a moment for any running tasks to see the shutdown flag
-    if (ThreadPool.IsValid())
-    {
-        // Give tasks a chance to see the shutdown flag and exit
-        const float MaxWaitTime = 1.0f; // Wait up to 1 second
-        const float CheckInterval = 0.01f; // Check every 10ms
-        float WaitTime = 0.0f;
-        
-        while (WaitTime < MaxWaitTime)
-        {
-            FPlatformProcess::Sleep(CheckInterval);
-            WaitTime += CheckInterval;
-            
-            // Check if there are still tasks running
-            if (ThreadPool.IsValid() && !ThreadPool->HasPendingTasks())
-            {
-                break;
-            }
-        }
-        
-        if (WaitTime >= MaxWaitTime)
-        {
-            UE_LOG(LogHorizon, Warning, TEXT("WebSocket client timed out waiting for tasks to complete during shutdown"));
-        }
     }
     
     Super::BeginDestroy();
