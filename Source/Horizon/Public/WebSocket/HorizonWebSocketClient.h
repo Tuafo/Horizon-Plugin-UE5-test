@@ -63,7 +63,7 @@ namespace Horizon
  * Client->SendMessage("Hello Server");
  * 
  * // Send message using utility
- * FString ChatMessage = UHorizonUtility::CreateChatMessage("Player1", "Hello World", "general");
+ * FString ChatMessage = UHorizonUtility::MakeChatMessage("Player1", "Hello World", "general");
  * Client->SendMessage(ChatMessage);
  * @endcode
  * 
@@ -196,23 +196,13 @@ public:
 	 * @param bHighPriority Unused parameter (kept for API compatibility)
 	 * @return true if the message was successfully sent
 	 * 
-	 * @see UHorizonUtility::CreateChatMessage() for chat messages
-	 * @see UHorizonUtility::CreateGameActionMessage() for game events
+	 * @see UHorizonUtility::MakeChatMessage() for chat messages
+	 * @see UHorizonUtility::MakeGameActionMessage() for game events
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages")
 	bool SendMessage(const FString& Message, bool bHighPriority = false);
 
-	/**
-	 * Sends a message immediately (same as SendMessage)
-	 * 
-	 * This method is kept for API compatibility. All messages
-	 * are now sent immediately by default.
-	 * 
-	 * @param Message The message content (plain text or JSON string)
-	 * @return true if the message was successfully sent
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages", meta = (DisplayName = "Send Message Now"))
-	bool SendMessageNow(const FString& Message);
+
 
 	/**
 	 * Sends binary data through the WebSocket connection
@@ -226,17 +216,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages")
 	bool SendBinaryMessage(const TArray<uint8>& Data, bool bHighPriority = false);
 
-	/**
-	 * Sends binary data immediately (same as SendBinaryMessage)
-	 * 
-	 * This method is kept for API compatibility. All messages
-	 * are now sent immediately by default.
-	 * 
-	 * @param Data The binary data to send
-	 * @return true if the binary message was successfully sent
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Horizon|WebSocket|Messages", meta = (DisplayName = "Send Binary Message Now"))
-	bool SendBinaryMessageNow(const TArray<uint8>& Data);
+
 
 	// Connection Status
 	
@@ -439,12 +419,12 @@ protected:
  *   Client->SendMessage("Hello World");
  *   
  *   // Chat message using UHorizonUtility
- *   FString ChatMsg = UHorizonUtility::CreateChatMessage("player123", "Hello!", "general");
+ *   FString ChatMsg = UHorizonUtility::MakeChatMessage("player123", "Hello!", "general");
  *   Client->SendMessage(ChatMsg);
  *   
  *   // Custom structured message
  *   TMap<FString, FString> CustomData;
  *   CustomData.Add("custom_field", "value");
- *   FString CustomMsg = UHorizonUtility::CreateJSONMessage("custom", "event", CustomData);
+ *   FString CustomMsg = UHorizonUtility::MakeJSONMessage("custom", "event", CustomData);
  *   Client->SendMessage(CustomMsg);
  */

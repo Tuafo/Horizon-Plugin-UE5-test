@@ -294,7 +294,7 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
         // Wrap in default game message format for server compatibility
         TMap<FString, FString> MessageData;
         MessageData.Add(TEXT("content"), Message);
-        MessageToSend = UHorizonUtility::CreateJSONMessage(TEXT("game"), TEXT("message"), MessageData);
+        MessageToSend = UHorizonUtility::MakeJSONMessage(TEXT("game"), TEXT("message"), MessageData);
     }
     
     // Send immediately using Async task (simplified approach)
@@ -308,11 +308,6 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
     return true;
 }
 
-bool UHorizonWebSocketClient::SendMessageNow(const FString& Message)
-{
-    // Send with high priority to bypass batching
-    return SendMessage(Message, true);
-}
 
 bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool bHighPriority)
 {
@@ -333,11 +328,6 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
     return true;
 }
 
-bool UHorizonWebSocketClient::SendBinaryMessageNow(const TArray<uint8>& Data)
-{
-    // Send with high priority to bypass batching
-    return SendBinaryMessage(Data, true);
-}
 
 bool UHorizonWebSocketClient::IsConnected() const
 {

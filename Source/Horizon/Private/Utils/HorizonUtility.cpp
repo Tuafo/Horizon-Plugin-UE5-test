@@ -78,7 +78,7 @@ bool UHorizonUtility::IsValidWebSocketURL(const FString& URL)
 	return false;
 }
 
-FString UHorizonUtility::CreateJSONMessage(const FString& Namespace, const FString& Event, const TMap<FString, FString>& Data, bool bAutoAddUUID, bool bAutoAddTimestamp)
+FString UHorizonUtility::MakeJSONMessage(const FString& Namespace, const FString& Event, const TMap<FString, FString>& Data, bool bAutoAddUUID, bool bAutoAddTimestamp)
 {
 	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
 	
@@ -204,17 +204,17 @@ FString UHorizonUtility::FormatBytes(int64 Bytes)
 	}
 }
 
-FString UHorizonUtility::CreateChatMessage(const FString& PlayerID, const FString& Message, const FString& Channel)
+FString UHorizonUtility::MakeChatMessage(const FString& PlayerID, const FString& Message, const FString& Channel)
 {
 	TMap<FString, FString> ChatData;
 	ChatData.Add(TEXT("player_id"), PlayerID);
 	ChatData.Add(TEXT("message"), Message);
 	ChatData.Add(TEXT("channel"), Channel);
 	
-	return CreateJSONMessage(TEXT("chat"), TEXT("message"), ChatData);
+	return MakeJSONMessage(TEXT("chat"), TEXT("message"), ChatData);
 }
 
-FString UHorizonUtility::CreateGameActionMessage(const FString& PlayerID, const FString& Action, const TMap<FString, FString>& AdditionalData)
+FString UHorizonUtility::MakeGameActionMessage(const FString& PlayerID, const FString& Action, const TMap<FString, FString>& AdditionalData)
 {
 	TMap<FString, FString> GameData;
 	GameData.Add(TEXT("player_id"), PlayerID);
@@ -226,10 +226,10 @@ FString UHorizonUtility::CreateGameActionMessage(const FString& PlayerID, const 
 		GameData.Add(Pair.Key, Pair.Value);
 	}
 	
-	return CreateJSONMessage(TEXT("game"), TEXT("player_action"), GameData);
+	return MakeJSONMessage(TEXT("game"), TEXT("player_action"), GameData);
 }
 
-FString UHorizonUtility::CreateSystemMessage(const FString& MessageType, const TMap<FString, FString>& Data)
+FString UHorizonUtility::MakeSystemMessage(const FString& MessageType, const TMap<FString, FString>& Data)
 {
 	TMap<FString, FString> SystemData;
 	SystemData.Add(TEXT("message_type"), MessageType);
@@ -240,10 +240,10 @@ FString UHorizonUtility::CreateSystemMessage(const FString& MessageType, const T
 		SystemData.Add(Pair.Key, Pair.Value);
 	}
 	
-	return CreateJSONMessage(TEXT("system"), MessageType, SystemData);
+	return MakeJSONMessage(TEXT("system"), MessageType, SystemData);
 }
 
-FString UHorizonUtility::CreatePlayerStatusMessage(const FString& PlayerID, const FString& Status, const TMap<FString, FString>& AdditionalData)
+FString UHorizonUtility::MakePlayerStatusMessage(const FString& PlayerID, const FString& Status, const TMap<FString, FString>& AdditionalData)
 {
 	TMap<FString, FString> StatusData;
 	StatusData.Add(TEXT("player_id"), PlayerID);
@@ -255,40 +255,10 @@ FString UHorizonUtility::CreatePlayerStatusMessage(const FString& PlayerID, cons
 		StatusData.Add(Pair.Key, Pair.Value);
 	}
 	
-	return CreateJSONMessage(TEXT("player"), TEXT("status_update"), StatusData);
+	return MakeJSONMessage(TEXT("player"), TEXT("status_update"), StatusData);
 }
 
-bool UHorizonUtility::SendChatMessageNow(UHorizonWebSocketClient* Client, const FString& PlayerID, const FString& Message, const FString& Channel)
-{
-	if (!Client)
-	{
-		return false;
-	}
-	
-	FString ChatMessage = CreateChatMessage(PlayerID, Message, Channel);
-	return Client->SendMessage(ChatMessage, true); // true = high priority (immediate)
-}
 
-bool UHorizonUtility::SendGameActionNow(UHorizonWebSocketClient* Client, const FString& PlayerID, const FString& Action, const TMap<FString, FString>& AdditionalData)
-{
-	if (!Client)
-	{
-		return false;
-	}
-	
-	FString ActionMessage = CreateGameActionMessage(PlayerID, Action, AdditionalData);
-	return Client->SendMessage(ActionMessage, true); // true = high priority (immediate)
-}
-
-bool UHorizonUtility::SendMessageImmediately(UHorizonWebSocketClient* Client, const FString& Message)
-{
-	if (!Client)
-	{
-		return false;
-	}
-	
-	return Client->SendMessage(Message, true); // true = high priority (immediate)
-}
 
 // WebSocket Creation Functions
 
