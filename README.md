@@ -125,38 +125,29 @@ sequenceDiagram
     PM->>BP: Performance Stats (if requested)
 ```
 
-## � Message Factory Architecture
+## 🔧 Message Utility System
 
-The plugin now uses a centralized message factory system for better organization and performance:
+The plugin provides a comprehensive utility system for creating and sending messages:
 
 ```mermaid
 graph TD
     subgraph "Message Creation Layer"
-        MF[Message Factory]
-        subgraph "Factory Methods"
-            TEXT[CreateTextMessage]
-            JSON[CreateJSONMessage]
+        UH[UHorizonUtility]
+        subgraph "Utility Methods"
+            TEXT[CreateJSONMessage]
             CHAT[CreateChatMessage]
             GAME[CreateGameActionMessage]
             SYS[CreateSystemMessage]
             STATUS[CreatePlayerStatusMessage]
-            BIN[CreateBinaryMessage]
+            IMMEDIATE[SendMessageImmediately]
         end
         
-        MF --> TEXT
-        MF --> JSON
-        MF --> CHAT
-        MF --> GAME
-        MF --> SYS
-        MF --> STATUS
-        MF --> BIN
-    end
-    
-    subgraph "Message Container Layer"
-        MSG[HorizonMessage]
-        POOL[Message Pool]
-        
-        MSG --> POOL
+        UH --> TEXT
+        UH --> CHAT
+        UH --> GAME
+        UH --> SYS
+        UH --> STATUS
+        UH --> IMMEDIATE
     end
     
     subgraph "WebSocket Layer"
@@ -166,37 +157,33 @@ graph TD
         WC --> SEND
     end
     
-    TEXT --> MSG
-    JSON --> MSG
-    CHAT --> MSG
-    GAME --> MSG
-    SYS --> MSG
-    STATUS --> MSG
-    BIN --> MSG
-    
-    MSG --> WC
-    POOL --> WC
+    TEXT --> WC
+    CHAT --> WC
+    GAME --> WC
+    SYS --> WC
+    STATUS --> WC
+    IMMEDIATE --> WC
 ```
 
 ### Key Benefits:
 
-1. **Centralized Message Creation**: All message creation is now handled by `FHorizonMessageFactory`
-2. **Better Performance**: Integrated with the message pooling system
-3. **Type Safety**: Proper message type management and validation
-4. **Consistent Structure**: All messages follow the same architectural patterns
-5. **Extensible**: Easy to add new message types without modifying multiple files
+1. **Centralized Message Creation**: All message creation handled by `UHorizonUtility`
+2. **Blueprint Integration**: Full Blueprint node support for all functions
+3. **Type Safety**: Proper message validation and formatting
+4. **Consistent Structure**: All messages follow the same JSON patterns
+5. **Immediate Sending**: High-priority message bypassing for critical data
 
 ### Usage Examples:
 
 ```cpp
-// Create messages using the factory
-auto ChatMessage = FHorizonMessageFactory::CreateChatMessage("player123", "Hello world!", "general");
-auto GameMessage = FHorizonMessageFactory::CreateGameActionMessage("player123", "jump", {{"x", "100"}, {"y", "200"}});
-auto SystemMessage = FHorizonMessageFactory::CreateSystemMessage("maintenance", {{"duration", "5 minutes"}});
+// Create messages using the utility
+FString ChatMessage = UHorizonUtility::CreateChatMessage("player123", "Hello world!", "general");
+FString GameMessage = UHorizonUtility::CreateGameActionMessage("player123", "jump", {{"x", "100"}, {"y", "200"}});
+FString SystemMessage = UHorizonUtility::CreateSystemMessage("maintenance", {{"duration", "5 minutes"}});
 
 // Send messages
 WebSocket->SendMessage(ChatMessage);
-WebSocket->SendMessageNow(GameMessage->GetText());
+UHorizonUtility::SendMessageImmediately(WebSocket, GameMessage);
 ```
 
 ## �🔄 Batching vs Immediate Sending
@@ -450,8 +437,8 @@ graph TD
        {
            UE_LOG(LogTemp, Log, TEXT("Connected to WebSocket server"));
            
-           // Create and send a message using the factory
-           auto WelcomeMessage = FHorizonMessageFactory::CreateChatMessage(
+           // Create and send a message using the utility
+           FString WelcomeMessage = UHorizonUtility::CreateChatMessage(
                TEXT("player123"), 
                TEXT("Hello from Unreal!"), 
                TEXT("general")
@@ -467,7 +454,7 @@ graph TD
        
        // Parse incoming message
        FString Namespace, Event, Data;
-       if (FHorizonMessageFactory::ParseJSONMessage(Message, Namespace, Event, Data))
+       if (UHorizonUtility::ParseJSONMessage(Message, Namespace, Event, Data))
        {
            UE_LOG(LogTemp, Log, TEXT("Parsed - Namespace: %s, Event: %s"), *Namespace, *Event);
        }
@@ -507,16 +494,16 @@ graph TD
    bool bIsConnected = WebSocket->IsConnected();
    ```
 
-3. **Advanced message handling with factory:**
+3. **Advanced message handling with utility:**
    ```cpp
    // Create different message types
-   auto ChatMessage = FHorizonMessageFactory::CreateChatMessage(
+   FString ChatMessage = UHorizonUtility::CreateChatMessage(
        TEXT("player123"), 
        TEXT("Hello everyone!"), 
        TEXT("general")
    );
    
-   auto GameActionMessage = FHorizonMessageFactory::CreateGameActionMessage(
+   FString GameActionMessage = UHorizonUtility::CreateGameActionMessage(
        TEXT("player123"), 
        TEXT("jump"), 
        {
@@ -526,7 +513,7 @@ graph TD
        }
    );
    
-   auto SystemMessage = FHorizonMessageFactory::CreateSystemMessage(
+   FString SystemMessage = UHorizonUtility::CreateSystemMessage(
        TEXT("maintenance"), 
        {
            {TEXT("duration"), TEXT("5 minutes")},
@@ -536,13 +523,12 @@ graph TD
    
    // Send messages with different priorities
    WebSocket->SendMessage(ChatMessage);           // Normal priority (batched)
-   WebSocket->SendMessageNow(GameActionMessage->GetText());  // High priority (immediate)
+   UHorizonUtility::SendMessageImmediately(WebSocket, GameActionMessage);  // High priority (immediate)
    WebSocket->SendMessage(SystemMessage);         // Normal priority (batched)
    
-   // Create and send binary message
+   // Send binary data
    TArray<uint8> BinaryData = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-   auto BinaryMessage = FHorizonMessageFactory::CreateBinaryMessage(BinaryData);
-   WebSocket->SendBinaryMessageNow(BinaryMessage->GetData());
+   WebSocket->SendBinaryMessageNow(BinaryData);
    ```
 
 ## 📝 Configuration Reference
@@ -678,45 +664,6 @@ Enable debug mode in Project Settings > Plugins > Horizon:
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🔄 Migration Guide
-
-### From Legacy Utility Functions to Message Factory
-
-The plugin architecture has been modernized with a centralized message factory system. All message creation now goes through `FHorizonMessageFactory` for better organization and performance.
-
-#### Modern Approach:
-```cpp
-// Use the message factory for all message creation
-auto ChatMessage = FHorizonMessageFactory::CreateChatMessage("player123", "Hello!", "general");
-auto GameMessage = FHorizonMessageFactory::CreateGameActionMessage("player123", "jump", {{"x", "100"}});
-WebSocket->SendMessage(ChatMessage);
-
-// For immediate sending (high priority)
-WebSocket->SendMessageNow(GameMessage->GetText());
-
-// Or use utility functions for immediate sending with automatic factory usage
-UHorizonUtility::SendChatMessageNow(WebSocket, "player123", "Urgent!", "general");
-```
-
-#### Key Architectural Benefits:
-- **Centralized Creation**: All message types created through one factory
-- **Better Performance**: Integrated with message pooling system
-- **Type Safety**: Proper message type management and validation
-- **Cleaner Code**: Clear separation between message creation and sending
-- **Extensible**: Easy to add new message types without touching multiple files
-
-#### What Changed:
-1. **Message Creation**: Now handled by `FHorizonMessageFactory`
-2. **Utility Functions**: Focus on operational helpers and immediate sending
-3. **Better Organization**: Message operations properly grouped in message system
-4. **Performance**: Factory integrates with pooling for optimal memory usage
-
-#### Migration Steps:
-1. Replace direct message creation with factory methods
-2. Include `#include "WebSocket/HorizonMessage.h"` in your headers
-3. Update any Blueprint graphs to use new factory approaches
-4. Utility immediate sending functions still work but now use factory internally
 
 ## 🤝 Contributing
 
