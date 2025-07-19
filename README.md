@@ -18,124 +18,138 @@ The Horizon WebSocket Plugin follows a clean, simple architecture inspired by So
 
 ```mermaid
 graph TD
-    subgraph "Game Instance Layer"
-        GI[Game Instance]
-        HS[Horizon Subsystem]
-        GI --> HS
-    end
-    
-    subgraph "Actor/Component Layer"
-        AC[Your Actor]
+    subgraph "Your Game Code"
+        AC[Your Actor/Blueprint]
         HC[Horizon WebSocket Component]
         AC --> HC
     end
     
-    subgraph "Core WebSocket Layer"
-        WC[Horizon WebSocket Client]
+    subgraph "Horizon Core"
+        HS[Horizon Subsystem]
+        WC[WebSocket Client]
+        HU[Horizon Utility]
+        
+        HC --> WC
+        WC --> HU
+        HS --> WC
+    end
+    
+    subgraph "Network Layer"
         WP[WebSocket Protocol]
+        SERVER[Your Server]
         
         WC --> WP
+        WP <--> SERVER
     end
     
-    subgraph "Utility Layer"
-        HU[Horizon Utility]
-    end
-    
-    HC --> HS
-    HS --> WC
-    WC --> HU
-    
-    WP -.-> SERVER[WebSocket Server]
+    style AC fill:#e1f5fe
+    style HC fill:#f3e5f5
+    style WC fill:#e8f5e8
+    style SERVER fill:#fff3e0
 ```
 
 ## 📊 Message Flow Architecture
 
-Simple message flow for immediate sending:
+Simple message flow - send immediately, no complex processing:
 
 ```mermaid
 sequenceDiagram
     participant BP as Blueprint/C++
-    participant HC as WebSocket Component
-    participant WC as WebSocket Client
-    participant SERVER as WebSocket Server
+    participant Comp as WebSocket Component
+    participant Client as WebSocket Client
+    participant Util as Horizon Utility
+    participant Server as Your Server
     
-    BP->>HC: Connect("ws://server:8080")
-    HC->>WC: Create & Configure Client
-    WC->>SERVER: WebSocket Handshake
-    SERVER->>WC: Handshake Response
-    WC->>HC: OnConnected Event
-    HC->>BP: OnConnected Delegate
+    Note over BP,Server: Connection Phase
+    BP->>Comp: Connect("ws://localhost:8080")
+    Comp->>Client: Connect to server
+    Client->>Server: WebSocket Handshake
+    Server->>Client: Handshake OK
+    Client->>Comp: OnConnected Event
+    Comp->>BP: OnConnected Delegate
     
-    BP->>HC: SendMessage("Hello Server")
-    HC->>WC: SendMessage(Message)
-    WC->>SERVER: Send Message Immediately
+    Note over BP,Server: Send Message Phase
+    BP->>Util: MakeChatMessage("player", "hello", "general")
+    Util->>BP: Returns JSON string
+    BP->>Comp: SendMessage(JSON)
+    Comp->>Client: SendMessage(JSON)
+    Client->>Server: Send Immediately (AsyncTask)
+    Server->>Client: Message Received
     
-    SERVER->>WC: Message Sent Confirmation
-    WC->>HC: OnMessageSent Event
-    HC->>BP: OnMessageSent Delegate
-    
-    SERVER->>WC: Incoming Message
-    WC->>HC: OnMessage Event
-    HC->>BP: OnMessage Delegate
+    Note over BP,Server: Receive Message Phase  
+    Server->>Client: Incoming Message
+    Client->>Comp: OnMessage Event
+    Comp->>BP: OnMessage Delegate
 ```
 
-## 🔧 Message Utility System
+## 🔧 Message Creation System
 
-The plugin provides a simple utility system for creating and sending messages:
+Simple utility system for creating structured messages:
 
 ```mermaid
-graph TD
-    subgraph "Message Creation Layer"
-        UH[UHorizonUtility]
-        subgraph "Utility Methods"
-            JSON[MakeJSONMessage]
-            CHAT[MakeChatMessage]
-            GAME[MakeGameActionMessage]
-            SYS[MakeSystemMessage]
-            STATUS[MakePlayerStatusMessage]
-        end
-        
-        UH --> JSON
-        UH --> CHAT
-        UH --> GAME
-        UH --> SYS
-        UH --> STATUS
+graph LR
+    subgraph "Your Code"
+        BP[Blueprint/C++]
     end
     
-    subgraph "WebSocket Layer"
-        WC[WebSocket Client]
-        SEND[SendMessage]
-        
-        WC --> SEND
+    subgraph "Horizon Utility"
+        JSON[MakeJSONMessage]
+        CHAT[MakeChatMessage]
+        GAME[MakeGameActionMessage]
+        SYS[MakeSystemMessage]
+        STATUS[MakePlayerStatusMessage]
     end
     
-    JSON --> WC
-    CHAT --> WC
-    GAME --> WC
-    SYS --> WC
-    STATUS --> WC
+    subgraph "WebSocket Client"
+        SEND[SendMessage<br/>Sends Immediately]
+    end
+    
+    subgraph "Your Server"
+        SERVER[WebSocket Server]
+    end
+    
+    BP --> JSON
+    BP --> CHAT
+    BP --> GAME
+    BP --> SYS
+    BP --> STATUS
+    
+    JSON --> SEND
+    CHAT --> SEND
+    GAME --> SEND
+    SYS --> SEND
+    STATUS --> SEND
+    
+    SEND --> SERVER
+    
+    style BP fill:#e1f5fe
+    style SEND fill:#e8f5e8
+    style SERVER fill:#fff3e0
 ```
 
 ### Key Benefits:
 
-1. **Centralized Message Creation**: All message creation handled by `UHorizonUtility`
-2. **Blueprint Integration**: Full Blueprint node support for all functions
-3. **Type Safety**: Proper message validation and formatting
-4. **Consistent Structure**: All messages follow the same JSON patterns
-5. **Immediate Sending**: All messages send immediately for low latency
+1. **Simple Architecture**: Clean 3-layer design (Component → Client → Server)
+2. **Immediate Sending**: All messages send instantly using AsyncTask
+3. **Blueprint Integration**: Full Blueprint node support for all functions
+4. **Type Safety**: Proper message validation and formatting using utilities
+5. **Consistent Structure**: All messages follow the same JSON patterns
 
 ### Usage Examples:
 
 ```cpp
-// Create messages using the utility
+// Create messages using the utility (all return JSON strings ready to send)
 FString ChatMessage = UHorizonUtility::MakeChatMessage("player123", "Hello world!", "general");
 FString GameMessage = UHorizonUtility::MakeGameActionMessage("player123", "jump", {{"x", "100"}, {"y", "200"}});
 FString SystemMessage = UHorizonUtility::MakeSystemMessage("maintenance", {{"duration", "5 minutes"}});
 
-// Send messages (all send immediately)
-WebSocket->SendMessage(ChatMessage);
-WebSocket->SendMessage(GameMessage);
-WebSocket->SendMessage(SystemMessage);
+// Send messages (all send immediately via AsyncTask)
+WebSocketComponent->SendMessage(ChatMessage);
+WebSocketComponent->SendMessage(GameMessage);
+WebSocketComponent->SendMessage(SystemMessage);
+
+// Or send plain text (automatically wrapped in game message format)
+WebSocketComponent->SendMessage("Hello Server!");
 ```
 
 ## 🎯 Blueprint Integration
@@ -145,62 +159,73 @@ The plugin provides comprehensive Blueprint support with intuitive nodes:
 ```mermaid
 graph LR
     subgraph "Connection Management"
-        CBP[Create WebSocket]
-        CONN[Connect]
-        DISC[Disconnect]
+        CREATE[Create WebSocket Component]
+        CONNECT[Connect to Server]
+        DISCONNECT[Disconnect]
         
-        CBP --> CONN
-        CONN --> DISC
+        CREATE --> CONNECT
+        CONNECT --> DISCONNECT
     end
     
-    subgraph "Message Handling"
+    subgraph "Message Creation"
+        CHAT[Make Chat Message]
+        GAME[Make Game Action]
+        SYSTEM[Make System Message]
+        JSON[Make JSON Message]
+        
+        CHAT --> SEND
+        GAME --> SEND
+        SYSTEM --> SEND
+        JSON --> SEND
+    end
+    
+    subgraph "Sending & Events"
         SEND[Send Message]
         RECV[On Message Received]
-        SENT[On Message Sent]
+        CONN_EVENT[On Connected]
+        DISC_EVENT[On Disconnected]
         
-        SEND --> SENT
-        RECV --> SENT
+        SEND --> RECV
     end
     
-    subgraph "Status Monitoring"
-        STAT[Get Connection State]
-        
-        STAT
-    end
-    
-    subgraph "Event Handling"
-        OCONN[On Connected]
-        OERR[On Error]
-        OCLOSE[On Closed]
-        
-        OCONN --> OERR
-        OERR --> OCLOSE
-    end
+    style CREATE fill:#e1f5fe
+    style SEND fill:#e8f5e8
+    style RECV fill:#fff3e0
 ```
 
 ## 🔧 Configuration and Settings
 
-The plugin provides simple configuration options through the WebSocket client properties:
+The plugin provides simple configuration options through the WebSocket client:
 
 ```mermaid
 graph TD
-    subgraph "WebSocket Client Properties"
-        subgraph "Connection Settings"
-            WS_AUTO[Auto Reconnect]
-            WS_ATTEMPTS[Max Reconnect Attempts]
-            WS_DELAY[Reconnect Delay]
+    subgraph "WebSocket Component Properties"
+        subgraph "Basic Connection"
+            AUTO[Auto Connect]
+            URL[Auto Connect URL]
+            PROTOCOL[Server Protocol]
+        end
+        
+        subgraph "Reconnection Settings"
+            AUTO_RECONNECT[Auto Reconnect]
+            MAX_ATTEMPTS[Max Reconnect Attempts]
+            RECONNECT_DELAY[Reconnect Delay]
         end
         
         subgraph "Heartbeat Settings"
-            HB_ENABLE[Enable Heartbeat]
-            HB_INTERVAL[Heartbeat Interval]
-            HB_MESSAGE[Heartbeat Message]
+            HEARTBEAT[Enable Heartbeat]
+            INTERVAL[Heartbeat Interval]
+            MESSAGE[Heartbeat Message]
         end
         
-        subgraph "Logging Settings"
-            LOG_VERBOSE[Verbose Logging]
+        subgraph "Debug Settings"
+            VERBOSE[Verbose Logging]
         end
     end
+    
+    style AUTO fill:#e8f5e8
+    style AUTO_RECONNECT fill:#e8f5e8
+    style HEARTBEAT fill:#e8f5e8
 ```
 
 ## 🎮 Usage Examples
@@ -215,7 +240,7 @@ graph TD
 2. **Configure the component:**
    - Set `Auto Connect` to `true`
    - Set `Auto Connect URL` to your server (e.g., `ws://localhost:8080`)
-   - Configure connection and heartbeat settings as needed
+   - Configure reconnection and heartbeat settings as needed
 
 3. **Handle WebSocket events:**
    ```
@@ -225,9 +250,11 @@ graph TD
    - Event OnClosed → Print "Disconnected from server"
    ```
 
-4. **Send messages:**
+4. **Send messages using utility nodes:**
    ```
-   Input Event → WebSocket Component → Send Message → "Hello Server!"
+   Input Event → Make Chat Message ("player1", "Hello!", "general") → WebSocket Component → Send Message
+   Input Event → Make Game Action ("player1", "jump", Data) → WebSocket Component → Send Message
+   Input Event → Send Message → "Plain text message"
    ```
 
 ### C++ Usage
@@ -235,22 +262,28 @@ graph TD
 1. **Include the necessary headers:**
    ```cpp
    #include "Utils/HorizonUtility.h"
-   #include "WebSocket/HorizonWebSocketClient.h"
-   #include "WebSocket/HorizonMessage.h"
+   #include "WebSocket/HorizonWebSocketComponent.h"
+   #include "Framework/HorizonSubsystem.h"
    ```
 
-2. **Create and configure a WebSocket client:**
+2. **Add component to your Actor:**
    ```cpp
-   // Create WebSocket client
-   UHorizonWebSocketClient* WebSocket = UHorizonUtility::CreateWebSocket(this);
+   // In Actor constructor
+   WebSocketComponent = CreateDefaultSubobject<UHorizonWebSocketComponent>(TEXT("WebSocketComponent"));
    
-   // Bind to events
-   WebSocket->OnConnected.AddDynamic(this, &AMyActor::OnWebSocketConnected);
-   WebSocket->OnMessage.AddDynamic(this, &AMyActor::OnWebSocketMessage);
-   WebSocket->OnClosed.AddDynamic(this, &AMyActor::OnWebSocketClosed);
-   
-   // Connect to server
-   WebSocket->Connect(TEXT("ws://localhost:8080"));
+   // In BeginPlay
+   void AMyActor::BeginPlay()
+   {
+       Super::BeginPlay();
+       
+       // Bind to events
+       WebSocketComponent->OnConnected.AddDynamic(this, &AMyActor::OnWebSocketConnected);
+       WebSocketComponent->OnMessage.AddDynamic(this, &AMyActor::OnWebSocketMessage);
+       WebSocketComponent->OnClosed.AddDynamic(this, &AMyActor::OnWebSocketClosed);
+       
+       // Connect to server
+       WebSocketComponent->Connect(TEXT("ws://localhost:8080"));
+   }
    ```
 
 3. **Handle WebSocket events:**
@@ -268,7 +301,7 @@ graph TD
                TEXT("Hello from Unreal!"), 
                TEXT("general")
            );
-           WebSocket->SendMessage(WelcomeMessage);
+           WebSocketComponent->SendMessage(WelcomeMessage);
        }
    }
    
@@ -299,23 +332,27 @@ graph TD
    // Get the Horizon subsystem
    UHorizonSubsystem* HorizonSubsystem = GetGameInstance()->GetSubsystem<UHorizonSubsystem>();
    
-   // Create and configure WebSocket
-   UHorizonWebSocketClient* WebSocket = HorizonSubsystem->CreateWebSocket();
+   // Create WebSocket client through subsystem
+   UHorizonWebSocketClient* WebSocketClient = HorizonSubsystem->CreateWebSocket();
    
    // Connect with custom protocol
-   WebSocket->Connect(TEXT("ws://localhost:8080"), TEXT("my-custom-protocol"));
+   WebSocketClient->Connect(TEXT("ws://localhost:8080"), TEXT("my-custom-protocol"));
    ```
 
 2. **Connection monitoring:**
    ```cpp
    // Check connection state
-   EHorizonWebSocketState State = WebSocket->GetConnectionState();
-   bool bIsConnected = WebSocket->IsConnected();
+   EHorizonWebSocketState State = WebSocketComponent->GetConnectionState();
+   bool bIsConnected = WebSocketComponent->IsConnected();
+   
+   // Get connection info
+   FString Stats = UHorizonUtility::GetPerformanceStatistics(this, true);
+   UE_LOG(LogTemp, Log, TEXT("WebSocket Stats: %s"), *Stats);
    ```
 
-3. **Advanced message handling with utility:**
+3. **Advanced message creation and sending:**
    ```cpp
-   // Create different message types
+   // Create different message types using utilities
    FString ChatMessage = UHorizonUtility::MakeChatMessage(
        TEXT("player123"), 
        TEXT("Hello everyone!"), 
@@ -340,14 +377,17 @@ graph TD
        }
    );
    
-   // Send messages (all send immediately)
-   WebSocket->SendMessage(ChatMessage);
-   WebSocket->SendMessage(GameActionMessage);
-   WebSocket->SendMessage(SystemMessage);
+   // Send messages (all send immediately via AsyncTask)
+   WebSocketComponent->SendMessage(ChatMessage);
+   WebSocketComponent->SendMessage(GameActionMessage);
+   WebSocketComponent->SendMessage(SystemMessage);
+   
+   // Send plain text (automatically wrapped)
+   WebSocketComponent->SendMessage(TEXT("Simple text message"));
    
    // Send binary data
    TArray<uint8> BinaryData = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-   WebSocket->SendBinaryMessage(BinaryData);
+   WebSocketComponent->SendBinaryMessage(BinaryData);
    ```
 
 ## 📝 Configuration Reference
@@ -369,59 +409,84 @@ graph TD
 ### Common Issues
 
 1. **Connection fails immediately:**
-   - Check if the server URL is correct
-   - Verify the server is running and accepting connections
-   - Check firewall settings
+   - Check if the server URL is correct and accessible
+   - Verify the server is running and accepting WebSocket connections
+   - Check firewall settings and network connectivity
 
 2. **Messages not being received:**
-   - Ensure event delegates are properly bound
-   - Check if the connection is still active
+   - Ensure event delegates are properly bound in Blueprint or C++
+   - Check if the connection is still active using `IsConnected()`
    - Verify server is sending valid WebSocket frames
 
-3. **Simple connection issues:**
-   - Check connection state using `GetConnectionState()`
-   - Enable verbose logging with `bVerboseLogging = true`
-   - Verify heartbeat settings if connection drops frequently
+3. **Connection drops frequently:**
+   - Check heartbeat settings (`Enable Heartbeat`, `Heartbeat Interval`)
+   - Verify server supports and responds to heartbeat messages
+   - Check network stability and connection quality
 
 ### Debug Settings
 
-Enable debug mode in Project Settings > Plugins > Horizon:
-- `Enable Debug Mode`: Shows additional logging
-- `Debug Server URLs`: Pre-configured test servers
-- `Auto Connect in PIE`: Automatically connect when playing in editor
-- `Simulate Connection Failures`: Test error handling
+Enable verbose logging for detailed diagnostics:
+```cpp
+// In C++
+WebSocketComponent->SetVerboseLogging(true);
+```
+
+```
+// In Blueprint
+WebSocket Component → Set Verbose Logging → True
+```
+
+This will show detailed logs for:
+- Connection attempts and handshakes
+- Message sending and receiving
+- Heartbeat messages
+- Reconnection attempts
 
 ## 🎯 Best Practices
 
-1. **Use the WebSocket Component for simple scenarios:**
+1. **Use the WebSocket Component for most scenarios:**
    ```cpp
-   // Best for: Simple actor-based WebSocket usage
+   // Recommended: Simple component-based approach
    UHorizonWebSocketComponent* Component = CreateDefaultSubobject<UHorizonWebSocketComponent>(TEXT("WebSocket"));
    ```
 
-2. **Use the Subsystem for complex scenarios:**
+2. **Use the Subsystem for game-wide management:**
    ```cpp
-   // Best for: Game-wide WebSocket management
+   // For complex scenarios: Game-wide WebSocket management
    UHorizonSubsystem* Subsystem = GetGameInstance()->GetSubsystem<UHorizonSubsystem>();
+   UHorizonWebSocketClient* Client = Subsystem->CreateWebSocket();
    ```
 
 3. **All messages send immediately:**
    ```cpp
-   // All messages send immediately - no need for special methods
-   WebSocket->SendMessage(TEXT("Any message"));
+   // Simple immediate sending - no batching or queuing
+   WebSocketComponent->SendMessage(TEXT("Any message"));
    ```
 
 4. **Use utility functions for structured messages:**
    ```cpp
-   // Create messages using utility functions
+   // Create structured messages using utilities
    FString ChatMsg = UHorizonUtility::MakeChatMessage("player1", "Hello", "general");
-   WebSocket->SendMessage(ChatMsg);
+   WebSocketComponent->SendMessage(ChatMsg);
+   
+   // Or send plain text (automatically wrapped)
+   WebSocketComponent->SendMessage("Plain text message");
    ```
 
-5. **Handle errors gracefully:**
+5. **Handle connection events gracefully:**
    ```cpp
-   WebSocket->OnConnectionError.AddDynamic(this, &AMyActor::OnConnectionError);
-   WebSocket->OnClosed.AddDynamic(this, &AMyActor::OnConnectionClosed);
+   // Always bind to connection events for robust error handling
+   WebSocketComponent->OnConnected.AddDynamic(this, &AMyActor::OnConnected);
+   WebSocketComponent->OnClosed.AddDynamic(this, &AMyActor::OnClosed);
+   WebSocketComponent->OnConnectionError.AddDynamic(this, &AMyActor::OnError);
+   ```
+
+6. **Use auto-reconnection for production:**
+   ```cpp
+   // Enable auto-reconnection for robust connections
+   WebSocketComponent->SetAutoReconnect(true);
+   WebSocketComponent->SetMaxReconnectAttempts(10);
+   WebSocketComponent->SetReconnectDelaySeconds(5.0f);
    ```
 
 ## 📄 License
