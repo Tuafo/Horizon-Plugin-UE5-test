@@ -43,8 +43,7 @@ namespace Horizon
  * @brief Simple WebSocket client for UE5 applications
  * 
  * The HorizonWebSocketClient provides a WebSocket implementation for real-time 
- * communication with custom servers. It features a simplified architecture
- * similar to SocketIOClient for ease of use.
+ * communication with custom servers. It features a simplified architecture.
  * 
  * Key Features:
  * - Simple connection management
@@ -276,10 +275,17 @@ public:
 	
 	/**
 	 * Message content for heartbeat packets
-	 * Can be customized to match your server's expected format
+	 * Will be sent as a structured system/ping message using UHorizonUtility
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Heartbeat")
 	FString HeartbeatMessage = TEXT("ping");
+	
+	/**
+	 * Timeout for waiting for pong response in seconds
+	 * If no pong is received within this time, the connection is considered lost
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Horizon|WebSocket|Heartbeat", meta = (ClampMin = "10.0", ClampMax = "300.0"))
+	float HeartbeatTimeoutSeconds = 60.0f;
 	
 	// Logging Configuration
 	
@@ -350,10 +356,10 @@ protected:
 	UPROPERTY()
 	class UHorizonWebSocketComponent* OwningComponent;
 
-	// Internal connection state
+	// Internal connection state - FIXED: Using std::atomic for thread safety
 	mutable FCriticalSection StateMutex;
-	EHorizonWebSocketState ConnectionState;
-	FThreadSafeBool bConnectionEstablished;
+	std::atomic<EHorizonWebSocketState> ConnectionState;
+	std::atomic<bool> bConnectionEstablished;
 
 	// Reconnection handling (simplified)
 	int32 CurrentReconnectAttempts;
@@ -361,6 +367,10 @@ protected:
 	FThreadSafeBool bCleaningUp;
 	double LastHeartbeatTime;
 	double LastMessageReceivedTime;
+
+	// Ping/Pong tracking for proper heartbeat
+	std::atomic<bool> bWaitingForPong;
+	std::atomic<double> LastPingTime;
 
 	// Socket and networking
 	mutable FCriticalSection SocketMutex;
@@ -392,7 +402,7 @@ protected:
 	bool SendHandshakeRequest();
 	bool ProcessHandshakeResponse(const FString& Response);
 	
-	// Simple message handling (SocketIOClient-style)
+	// Simple message handling
 	void ProcessReceivedFrame(bool bFinal, uint8 Opcode, const TArray<uint8>& Payload);
 	void ProcessReceivedMessage(TSharedPtr<Horizon::WebSocket::FHorizonMessage> Message);
 	

@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0.0",
 	"FriendlyName": "Horizon Plugin UE5",
-	"Description": "Horizon - Simple, lightweight WebSocket client plugin for Unreal Engine 5. Provides clean WebSocket communication with custom servers using an architecture inspired by SocketIOClient.",
+	"Description": "Horizon - Simple, lightweight WebSocket client plugin for Unreal Engine 5. Provides clean WebSocket communication with Horizon.",
 	"Category": "Networking",
 	"CreatedBy": "Horizon Development",
 	"CreatedByURL": "",

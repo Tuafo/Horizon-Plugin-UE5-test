@@ -27,6 +27,8 @@ UHorizonWebSocketClient::UHorizonWebSocketClient()
       , bCleaningUp(false)
       , LastHeartbeatTime(0.0)
       , LastMessageReceivedTime(0.0)
+      , bWaitingForPong(false)
+      , LastPingTime(0.0)
       , Socket(nullptr)
       , ServerPort(0)
       , bIsSecureConnection(false)
@@ -58,7 +60,11 @@ void UHorizonWebSocketClient::Initialize()
     // Initialize extensions flags
     ExtensionFlags = Horizon::Protocol::FWebSocketProtocol::FExtensionFlags();
     
-    UE_LOG(LogHorizon, Log, TEXT("HorizonWebSocketClient initialized (simplified)"));
+    // Reset ping/pong state
+    bWaitingForPong = false;
+    LastPingTime = 0.0;
+    
+    UE_LOG(LogHorizon, Log, TEXT("HorizonWebSocketClient initialized with improved ping/pong"));
 }
 
 void UHorizonWebSocketClient::BeginDestroy()
@@ -86,37 +92,91 @@ UWorld* UHorizonWebSocketClient::GetWorld() const
 
 void UHorizonWebSocketClient::Tick(float DeltaTime)
 {
-    // Simple heartbeat check (removed complex reconnection scheduling)
-    if (bEnableHeartbeat && IsConnected())
+    // Check shutdown first
+    if (bShouldShutdown || bCleaningUp)
     {
-        double CurrentTime = FPlatformTime::Seconds();
-        double TimeSinceLastMessage = CurrentTime - LastMessageReceivedTime;
-        double TimeoutThreshold = HeartbeatIntervalSeconds * 3.0; // 3x heartbeat interval
-
-        if (TimeSinceLastMessage > TimeoutThreshold)
-        {
-            LogMessage(FString::Printf(TEXT("Connection timeout detected (%.1fs since last message)"), TimeSinceLastMessage), true);
-            // Simple reconnection - just try again immediately if enabled
-            if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
-            {
-                CurrentReconnectAttempts++;
-                LogMessage(FString::Printf(TEXT("Auto-reconnecting (attempt %d/%d)"), CurrentReconnectAttempts, MaxReconnectAttempts));
-                CleanupWebSocket();
-                Connect(ServerURL, ServerProtocol);
-            }
-            else
-            {
-                SetConnectionState(EHorizonWebSocketState::Failed);
-                CleanupWebSocket();
-            }
-        }
-        // Send heartbeat if needed
-        else if (CurrentTime - LastHeartbeatTime >= HeartbeatIntervalSeconds)
-        {
-            SendHeartbeat();
-            LastHeartbeatTime = CurrentTime;
-        }
+        return;
     }
+
+    // double CurrentTime = FPlatformTime::Seconds();
+    
+    // More reliable connection check using atomic variables
+    // bool bCurrentlyConnected = bConnectionEstablished.load() && (ConnectionState.load() == EHorizonWebSocketState::Connected);
+    
+    // Add periodic debug info every 5 seconds
+    // static double LastDebugTime = 0.0;
+    // if (CurrentTime - LastDebugTime > 5.0) // Every 5 seconds
+    // {
+    //     UE_LOG(LogHorizon, Warning, TEXT("=== TICK DEBUG (every 5s) ==="));
+    //     UE_LOG(LogHorizon, Warning, TEXT("bConnectionEstablished (atomic): %s"), bConnectionEstablished.load() ? TEXT("TRUE") : TEXT("FALSE"));
+    //     UE_LOG(LogHorizon, Warning, TEXT("ConnectionState (atomic): %d"), (int32)ConnectionState.load());
+    //     UE_LOG(LogHorizon, Warning, TEXT("bCurrentlyConnected: %s"), bCurrentlyConnected ? TEXT("TRUE") : TEXT("FALSE"));
+    //     UE_LOG(LogHorizon, Warning, TEXT("IsConnected(): %s"), IsConnected() ? TEXT("TRUE") : TEXT("FALSE"));
+    //     UE_LOG(LogHorizon, Warning, TEXT("bEnableHeartbeat: %s"), bEnableHeartbeat ? TEXT("TRUE") : TEXT("FALSE"));
+    //     UE_LOG(LogHorizon, Warning, TEXT("HeartbeatIntervalSeconds: %.2f"), HeartbeatIntervalSeconds);
+    //     UE_LOG(LogHorizon, Warning, TEXT("Time since last heartbeat: %.2f"), CurrentTime - LastHeartbeatTime);
+    //     UE_LOG(LogHorizon, Warning, TEXT("bWaitingForPong: %s"), bWaitingForPong.load() ? TEXT("TRUE") : TEXT("FALSE"));
+    //     UE_LOG(LogHorizon, Warning, TEXT("Should send heartbeat: %s"), 
+    //         (!bWaitingForPong.load() && (CurrentTime - LastHeartbeatTime >= HeartbeatIntervalSeconds)) ? TEXT("YES") : TEXT("NO"));
+    //     UE_LOG(LogHorizon, Warning, TEXT("==============================="));
+    //     LastDebugTime = CurrentTime;
+    // }
+    
+    // if (bEnableHeartbeat && bCurrentlyConnected)
+    // {
+        // double TimeSinceLastMessage = CurrentTime - LastMessageReceivedTime;
+
+        
+        // Check for pong timeout if we're waiting for one
+        // if (bWaitingForPong.load())
+        // {
+        //     double TimeSincePing = CurrentTime - LastPingTime.load();
+        //     if (TimeSincePing > HeartbeatTimeoutSeconds)
+        //     {
+        //         LogMessage(FString::Printf(TEXT("Heartbeat timeout - no pong received for %.1fs"), TimeSincePing), true);
+        //         if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
+        //         {
+        //             CurrentReconnectAttempts++;
+        //             LogMessage(FString::Printf(TEXT("Auto-reconnecting due to heartbeat timeout (attempt %d/%d)"), CurrentReconnectAttempts, MaxReconnectAttempts));
+        //             CleanupWebSocket();
+        //             Connect(ServerURL, ServerProtocol);
+        //         }
+        //         else
+        //         {
+        //             SetConnectionState(EHorizonWebSocketState::Failed);
+        //             CleanupWebSocket();
+        //         }
+        //         return;
+        //     }
+        // }
+        
+        // Send heartbeat if needed and not waiting for pong
+        // if (!bWaitingForPong.load() && (CurrentTime - LastHeartbeatTime >= HeartbeatIntervalSeconds))
+        // {
+        //     UE_LOG(LogHorizon, Warning, TEXT("=== TICK: Time to send heartbeat! ==="));
+        //     SendHeartbeat();
+        //     LastHeartbeatTime = CurrentTime;
+        // }
+        
+        // // Fallback timeout check - connection lost if no messages for too long
+        // double TimeoutThreshold = HeartbeatIntervalSeconds * 4.0; // 4x heartbeat interval
+        // if (TimeSinceLastMessage > TimeoutThreshold)
+        // {
+        //     LogMessage(FString::Printf(TEXT("Connection timeout detected (%.1fs since last message)"), TimeSinceLastMessage), true);
+        //     if (bAutoReconnect && CurrentReconnectAttempts < MaxReconnectAttempts)
+        //     {
+        //         CurrentReconnectAttempts++;
+        //         LogMessage(FString::Printf(TEXT("Auto-reconnecting (attempt %d/%d)"), CurrentReconnectAttempts, MaxReconnectAttempts));
+        //         CleanupWebSocket();
+        //         Connect(ServerURL, ServerProtocol);
+        //     }
+        //     else
+        //     {
+        //         SetConnectionState(EHorizonWebSocketState::Failed);
+        //         CleanupWebSocket();
+        //     }
+        // }
+    // }   
 }
 
 TStatId UHorizonWebSocketClient::GetStatId() const
@@ -276,7 +336,8 @@ void UHorizonWebSocketClient::Disconnect()
 
 bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPriority)
 {
-    if (!IsConnected())
+    // FIXED: Use more reliable connection check
+    if (!bConnectionEstablished.load() || ConnectionState.load() != EHorizonWebSocketState::Connected)
     {
         LogMessage(TEXT("Cannot send message: not connected"), true);
         return false;
@@ -300,9 +361,13 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
     // Send immediately using Async task (simplified approach)
     AsyncTask(ENamedThreads::AnyThread, [this, MessageToSend]()
     {
-        // Create WebSocket text frame and send
-        TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateWebSocketFrame(MessageToSend, true);
-        SendSocketData(FrameData);
+        // Double-check connection before sending
+        if (bConnectionEstablished.load() && ConnectionState.load() == EHorizonWebSocketState::Connected)
+        {
+            // Create WebSocket text frame and send
+            TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateWebSocketFrame(MessageToSend, true);
+            SendSocketData(FrameData);
+        }
     });
     
     return true;
@@ -311,7 +376,8 @@ bool UHorizonWebSocketClient::SendMessage(const FString& Message, bool bHighPrio
 
 bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool bHighPriority)
 {
-    if (!IsConnected())
+    // FIXED: Use more reliable connection check
+    if (!bConnectionEstablished.load() || ConnectionState.load() != EHorizonWebSocketState::Connected)
     {
         LogMessage(TEXT("Cannot send binary message: not connected"), true);
         return false;
@@ -320,9 +386,13 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
     // Send immediately using Async task (simplified approach)
     AsyncTask(ENamedThreads::AnyThread, [this, Data]()
     {
-        // Create WebSocket binary frame and send
-        TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateBinaryFrame(Data, true);
-        SendSocketData(FrameData);
+        // Double-check connection before sending
+        if (bConnectionEstablished.load() && ConnectionState.load() == EHorizonWebSocketState::Connected)
+        {
+            // Create WebSocket binary frame and send
+            TArray<uint8> FrameData = Horizon::Protocol::FWebSocketProtocol::CreateBinaryFrame(Data, true);
+            SendSocketData(FrameData);
+        }
     });
     
     return true;
@@ -331,14 +401,13 @@ bool UHorizonWebSocketClient::SendBinaryMessage(const TArray<uint8>& Data, bool 
 
 bool UHorizonWebSocketClient::IsConnected() const
 {
-    // Use the thread-safe flag instead of checking socket directly
-    return bConnectionEstablished;
+    // FIXED: Use atomic variables for thread-safe access
+    return bConnectionEstablished.load() && (ConnectionState.load() == EHorizonWebSocketState::Connected);
 }
 
 EHorizonWebSocketState UHorizonWebSocketClient::GetConnectionState() const
 {
-    FScopeLock Lock(&StateMutex);
-    return ConnectionState;
+    return ConnectionState.load();
 }
 
 void UHorizonWebSocketClient::ForceReconnect()
@@ -355,21 +424,39 @@ void UHorizonWebSocketClient::ForceReconnect()
 
 void UHorizonWebSocketClient::SendHeartbeat()
 {
+    // Add comprehensive debugging
+    UE_LOG(LogHorizon, Warning, TEXT("=== HEARTBEAT DEBUG START ==="));
+    UE_LOG(LogHorizon, Warning, TEXT("bConnectionEstablished (atomic): %s"), bConnectionEstablished.load() ? TEXT("TRUE") : TEXT("FALSE"));
+    UE_LOG(LogHorizon, Warning, TEXT("ConnectionState (atomic): %d"), (int32)ConnectionState.load());
+    UE_LOG(LogHorizon, Warning, TEXT("IsConnected() result: %s"), IsConnected() ? TEXT("TRUE") : TEXT("FALSE"));
+    UE_LOG(LogHorizon, Warning, TEXT("bShouldShutdown: %s"), bShouldShutdown ? TEXT("TRUE") : TEXT("FALSE"));
+    UE_LOG(LogHorizon, Warning, TEXT("================================"));
+
     if (!IsConnected())
     {
+        UE_LOG(LogHorizon, Warning, TEXT("=== HEARTBEAT FAILED - NOT CONNECTED ==="));
         return;
     }
 
-    if (bVerboseLogging)
-    {
-        LogMessage(FString::Printf(TEXT("Sending heartbeat: %s"), *HeartbeatMessage));
-    }
-
-    // Send heartbeat using high priority
-    SendMessage(HeartbeatMessage, true);
+    // Create structured ping message using UHorizonUtility
+    TMap<FString, FString> PingData;
+    PingData.Add(TEXT("timestamp"), FString::FromInt(FDateTime::UtcNow().ToUnixTimestamp()));
+    PingData.Add(TEXT("client_id"), UHorizonUtility::GenerateClientID());
     
-    // Update last heartbeat time
-    LastHeartbeatTime = FPlatformTime::Seconds();
+    FString StructuredPingMessage = UHorizonUtility::MakeJSONMessage(TEXT("system"), TEXT("ping"), PingData);
+
+    UE_LOG(LogHorizon, Warning, TEXT("=== SENDING PING MESSAGE ==="));
+    UE_LOG(LogHorizon, Warning, TEXT("Message: %s"), *StructuredPingMessage);
+    UE_LOG(LogHorizon, Warning, TEXT("Message Length: %d"), StructuredPingMessage.Len());
+    UE_LOG(LogHorizon, Warning, TEXT("================================"));
+
+    // Send structured ping message
+    SendMessage(StructuredPingMessage, true);
+    
+    // Update ping state using atomic operations
+    bWaitingForPong.store(true);
+    LastPingTime.store(FPlatformTime::Seconds());
+    LastHeartbeatTime = LastPingTime.load();
 }
 
 FString UHorizonWebSocketClient::GetServerURL() const
@@ -396,7 +483,13 @@ void UHorizonWebSocketClient::CleanupWebSocket()
     }
     
     bCleaningUp = true;
-    bConnectionEstablished = false;
+    
+    // FIXED: Use atomic store for thread safety
+    bConnectionEstablished.store(false);
+    
+    // Reset ping/pong state using atomic operations
+    bWaitingForPong.store(false);
+    LastPingTime.store(0.0);
 
     // Clean up socket
     {
@@ -442,20 +535,19 @@ void UHorizonWebSocketClient::CleanupWebSocket()
 
 void UHorizonWebSocketClient::SetConnectionState(EHorizonWebSocketState NewState)
 {
-    FScopeLock Lock(&StateMutex);
-
-    if (ConnectionState != NewState)
+    EHorizonWebSocketState OldState = ConnectionState.load();
+    
+    if (OldState != NewState)
     {
-        EHorizonWebSocketState OldState = ConnectionState;
-        ConnectionState = NewState;
-
+        // FIXED: Use atomic store for thread safety
+        ConnectionState.store(NewState);
         LogMessage(FString::Printf(TEXT("State changed from %d to %d"), (int32)OldState, (int32)NewState));
     }
 }
 
 void UHorizonWebSocketClient::HandleReconnection()
 {
-    // Simplified reconnection - just attempt immediate reconnect (SocketIOClient style)
+    // Simplified reconnection - just attempt immediate reconnect
     if (bShouldShutdown || !bAutoReconnect)
     {
         return;
@@ -562,11 +654,23 @@ bool UHorizonWebSocketClient::ParseURL(const FString& URL, FString& OutHost, int
 // Event handlers (called from worker thread, dispatched to game thread)
 void UHorizonWebSocketClient::OnWebSocketConnected()
 {
+    UE_LOG(LogHorizon, Warning, TEXT("=== OnWebSocketConnected CALLED ==="));
+    UE_LOG(LogHorizon, Warning, TEXT("Setting bConnectionEstablished to TRUE"));
+    UE_LOG(LogHorizon, Warning, TEXT("Previous ConnectionState: %d"), (int32)GetConnectionState());
+    
     LogMessage(TEXT("WebSocket connected successfully"));
     SetConnectionState(EHorizonWebSocketState::Connected);
-    bConnectionEstablished = true;
+    
+    // FIXED: Use atomic store for thread safety
+    bConnectionEstablished.store(true);
+    
     CurrentReconnectAttempts = 0;
     LastMessageReceivedTime = FPlatformTime::Seconds();
+
+    UE_LOG(LogHorizon, Warning, TEXT("New ConnectionState: %d"), (int32)GetConnectionState());
+    UE_LOG(LogHorizon, Warning, TEXT("bConnectionEstablished is now: %s"), bConnectionEstablished.load() ? TEXT("TRUE") : TEXT("FALSE"));
+    UE_LOG(LogHorizon, Warning, TEXT("IsConnected() now returns: %s"), IsConnected() ? TEXT("TRUE") : TEXT("FALSE"));
+    UE_LOG(LogHorizon, Warning, TEXT("======================================="));
 
     // Broadcast delegate on game thread
     AsyncTask(ENamedThreads::GameThread, [this]()
@@ -583,7 +687,9 @@ void UHorizonWebSocketClient::OnWebSocketConnectionError(const FString& Error)
 {
     LogMessage(FString::Printf(TEXT("Connection error: %s"), *Error), true);
     SetConnectionState(EHorizonWebSocketState::Failed);
-    bConnectionEstablished = false;
+    
+    // FIXED: Use atomic store for thread safety
+    bConnectionEstablished.store(false);
 
     // Broadcast delegate on game thread
     AsyncTask(ENamedThreads::GameThread, [this, Error]()
@@ -608,7 +714,9 @@ void UHorizonWebSocketClient::OnWebSocketClosed(int32 StatusCode, const FString&
         StatusCode, *Reason, bWasClean ? TEXT("Yes") : TEXT("No")));
 
     SetConnectionState(EHorizonWebSocketState::Disconnected);
-    bConnectionEstablished = false;
+    
+    // FIXED: Use atomic store for thread safety
+    bConnectionEstablished.store(false);
 
     // Broadcast delegate on game thread
     AsyncTask(ENamedThreads::GameThread, [this, StatusCode, Reason, bWasClean]()
@@ -630,9 +738,47 @@ void UHorizonWebSocketClient::OnWebSocketClosed(int32 StatusCode, const FString&
 void UHorizonWebSocketClient::OnWebSocketMessage(const FString& Message)
 {
     LastMessageReceivedTime = FPlatformTime::Seconds();
-    LogMessage(FString::Printf(TEXT("Received message: %s"), *Message));
+    
+    if (bVerboseLogging)
+    {
+        LogMessage(FString::Printf(TEXT("Received message: %s"), *Message));
+    }
 
-    // Broadcast delegate on game thread
+    // Check if this is a pong response from the server
+    // Parse as JSON to check if it's a pong response
+    TSharedPtr<FJsonObject> JsonObject;
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Message);
+    
+    if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid())
+    {
+        // Check if this is a raw pong response (server's direct response format)
+        if (JsonObject->HasField(TEXT("message")))
+        {
+            FString MessageField = JsonObject->GetStringField(TEXT("message"));
+            if (MessageField == TEXT("pong") && bWaitingForPong.load())
+            {
+                bWaitingForPong.store(false);
+                LogMessage(TEXT("Pong received from server (raw format)"));
+                return; // Don't broadcast pong messages to application
+            }
+        }
+        
+        // Also check for structured pong responses (namespace/event format)
+        if (JsonObject->HasField(TEXT("namespace")) && JsonObject->HasField(TEXT("event")))
+        {
+            FString Namespace = JsonObject->GetStringField(TEXT("namespace"));
+            FString Event = JsonObject->GetStringField(TEXT("event"));
+            
+            if (Namespace == TEXT("system") && Event == TEXT("pong") && bWaitingForPong.load())
+            {
+                bWaitingForPong.store(false);
+                LogMessage(TEXT("Pong received from server (structured format)"));
+                return; // Don't broadcast pong messages to application
+            }
+        }
+    }
+
+    // Broadcast delegate on game thread for non-pong messages
     AsyncTask(ENamedThreads::GameThread, [this, Message]()
         {
             if (IsValid(this))
@@ -662,7 +808,11 @@ void UHorizonWebSocketClient::OnWebSocketRawMessage(const TArray<uint8>& Data)
 void UHorizonWebSocketClient::OnWebSocketMessageSent(const FString& Message)
 {
     LastHeartbeatTime = FPlatformTime::Seconds();
-    LogMessage(FString::Printf(TEXT("Message sent: %s"), *Message));
+    
+    if (bVerboseLogging)
+    {
+        LogMessage(FString::Printf(TEXT("Message sent: %s"), *Message));
+    }
 
     // Broadcast delegate on game thread
     AsyncTask(ENamedThreads::GameThread, [this, Message]()
@@ -791,8 +941,9 @@ void UHorizonWebSocketClient::ProcessReceivedMessage(TSharedPtr<Horizon::WebSock
         }
         case Horizon::WebSocket::FHorizonMessage::EType::Pong:
         {
-            // Pong received, update last message time
+            // Pong received, update last message time using atomic operation
             LastMessageReceivedTime = FPlatformTime::Seconds();
+            bWaitingForPong.store(false);
             break;
         }
         case Horizon::WebSocket::FHorizonMessage::EType::Close:
@@ -849,7 +1000,7 @@ bool UHorizonWebSocketClient::PerformHandshake()
     
     // Wait for handshake response with timeout
     const double StartTime = FPlatformTime::Seconds();
-    const double TimeoutSeconds = 15.0; // 10 second timeout
+    const double TimeoutSeconds = 15.0; // 15 second timeout
     FString HandshakeResponse;
     TArray<uint8> ResponseBuffer;
     
@@ -957,15 +1108,13 @@ bool UHorizonWebSocketClient::ProcessHandshakeResponse(const FString& Response)
     LogMessage(FString::Printf(TEXT("WebSocket connected to %s (Protocol: %s)"),
         *ServerURL, ServerProtocol.IsEmpty() ? TEXT("None") : *ServerProtocol));
     
-    // Update state
-    bConnectionEstablished = true;
+    // Update state - FIXED: Set connection state before calling OnWebSocketConnected
     SetConnectionState(EHorizonWebSocketState::Connected);
+    bConnectionEstablished.store(true);
     
     // Reset reconnect attempts
     CurrentReconnectAttempts = 0;
     LastMessageReceivedTime = FPlatformTime::Seconds();
-    
-    // Track connection
     
     // Call connected callback on game thread
     AsyncTask(ENamedThreads::GameThread, [this]() {
@@ -985,7 +1134,7 @@ bool UHorizonWebSocketClient::ProcessHandshakeResponse(const FString& Response)
                 // Double-check we're still valid before processing
                 if (!bShouldShutdown && IsValid(this))
                 {
-                    // Process data directly (simplified SocketIOClient-style approach)
+                    // Process data directly
                     FrameBuffer.Append(ReceivedData);
                     
                     // Process complete frames directly
@@ -1144,4 +1293,3 @@ bool UHorizonWebSocketClient::WaitForSocketConnection()
     LogMessage(TEXT("Socket connection timeout"), true);
     return false;
 }
-
